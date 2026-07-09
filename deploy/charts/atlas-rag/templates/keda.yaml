@@ -1,0 +1,96 @@
+{{- if .Values.keda.enabled }}
+{{- if .Values.keda.authentication.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-kafka
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  podIdentity:
+    provider: {{ .Values.keda.authentication.podIdentityProvider }}
+    identityOwner: workload
+---
+{{- end }}
+{{- if .Values.ingestionWorker.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-ingestion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "atlas-rag.fullname" . }}-ingestion-worker
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:
+    restoreToOriginalReplicaCount: true
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ .Values.keda.kafka.bootstrapServers | quote }}
+        consumerGroup: {{ .Values.ingestionWorker.consumerGroup | quote }}
+        topic: {{ .Values.ingestionWorker.topic | quote }}
+        lagThreshold: {{ .Values.keda.kafka.lagThreshold | quote }}
+        activationLagThreshold: {{ .Values.keda.kafka.activationLagThreshold | quote }}
+        offsetResetPolicy: {{ .Values.keda.kafka.offsetResetPolicy | quote }}
+        allowIdleConsumers: {{ .Values.keda.kafka.allowIdleConsumers | quote }}
+        tls: {{ .Values.keda.kafka.tls | quote }}
+        sasl: {{ .Values.keda.kafka.sasl | quote }}
+        {{- with .Values.keda.kafka.awsRegion }}
+        awsRegion: {{ . | quote }}
+        {{- end }}
+      {{- if $.Values.keda.authentication.enabled }}
+      authenticationRef:
+        name: {{ include "atlas-rag.fullname" $ }}-kafka
+      {{- end }}
+{{- end }}
+{{- if and .Values.ingestionWorker.enabled .Values.deletionWorker.enabled }}
+---
+{{- end }}
+{{- if .Values.deletionWorker.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-deletion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "atlas-rag.fullname" . }}-deletion-worker
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:
+    restoreToOriginalReplicaCount: true
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ .Values.keda.kafka.bootstrapServers | quote }}
+        consumerGroup: {{ .Values.deletionWorker.consumerGroup | quote }}
+        topic: {{ .Values.deletionWorker.topic | quote }}
+        lagThreshold: {{ .Values.keda.kafka.lagThreshold | quote }}
+        activationLagThreshold: {{ .Values.keda.kafka.activationLagThreshold | quote }}
+        offsetResetPolicy: {{ .Values.keda.kafka.offsetResetPolicy | quote }}
+        allowIdleConsumers: {{ .Values.keda.kafka.allowIdleConsumers | quote }}
+        tls: {{ .Values.keda.kafka.tls | quote }}
+        sasl: {{ .Values.keda.kafka.sasl | quote }}
+        {{- with .Values.keda.kafka.awsRegion }}
+        awsRegion: {{ . | quote }}
+        {{- end }}
+      {{- if $.Values.keda.authentication.enabled }}
+      authenticationRef:
+        name: {{ include "atlas-rag.fullname" $ }}-kafka
+      {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,53 @@
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-api
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.api.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-frontend
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.frontend.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "frontend") | nindent 6 }}
+{{- if .Values.ingestionWorker.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-ingestion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.pdb.workers.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "ingestion-worker") | nindent 6 }}
+{{- end }}
+{{- if .Values.deletionWorker.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-deletion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.pdb.workers.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "deletion-worker") | nindent 6 }}
+{{- end }}
+{{- end }}

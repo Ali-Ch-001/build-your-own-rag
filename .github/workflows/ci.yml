@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python quality
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.8"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: uv lock --check
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy src
+      - run: uv run pytest --cov=rag_platform --cov-report=term-missing
+
+  frontend:
+    name: Frontend quality
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  containers:
+    name: Container ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: .
+            file: Dockerfile
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          load: true
+          push: false
+          tags: atlas-rag-${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Vulnerability scan
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: atlas-rag-${{ matrix.name }}:ci
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Upload vulnerability report
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+      - name: Generate SBOM
+        if: always()
+        uses: anchore/sbom-action@v0.20.4
+        with:
+          image: atlas-rag-${{ matrix.name }}:ci
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.spdx.json
+          if-no-files-found: error
+
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+      - run: terraform fmt -check -recursive infra
+      - run: terraform -chdir=infra/bootstrap/aws init -backend=false
+      - run: terraform -chdir=infra/bootstrap/aws validate
+      - run: terraform -chdir=infra/stacks/aws init -backend=false
+      - run: terraform -chdir=infra/stacks/aws validate
+
+  helm:
+    name: Helm and Kubernetes validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+      - name: Lint chart
+        run: |
+          helm lint deploy/charts/atlas-rag
+          helm lint deploy/charts/atlas-rag -f deploy/charts/atlas-rag/values-local.yaml
+          helm lint deploy/charts/atlas-rag -f deploy/charts/atlas-rag/values-production.example.yaml
+      - name: Render production resources
+        run: helm template atlas-rag deploy/charts/atlas-rag --namespace atlas-rag -f deploy/charts/atlas-rag/values-production.example.yaml > /tmp/atlas-rag.yaml
+      - name: Validate Kubernetes schemas
+        run: docker run --rm -v /tmp:/manifests ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -ignore-missing-schemas -kubernetes-version 1.32.0 /manifests/atlas-rag.yaml

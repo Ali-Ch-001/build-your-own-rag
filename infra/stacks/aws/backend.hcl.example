@@ -1,0 +1,6 @@
+bucket         = "replace-me-atlas-rag-terraform-state"
+key            = "atlas-rag/prod/us-east-1/platform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "atlas-rag-terraform-locks"
+encrypt        = true
+kms_key_id     = "replace-with-bootstrap-kms-key-arn"

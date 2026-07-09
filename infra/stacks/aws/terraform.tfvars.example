@@ -1,0 +1,48 @@
+aws_region  = "us-east-1"
+environment = "prod"
+name_prefix = "atlas-rag"
+vpc_cidr    = "10.40.0.0/16"
+
+# per_az is the resilient production default. single reduces NAT hourly cost.
+nat_gateway_mode   = "per_az"
+enable_vpc_endpoints = true
+
+eks_cluster_version          = "1.32"
+eks_addon_versions = {
+  coredns    = "v1.11.4-eksbuild.2"
+  kube-proxy = "v1.32.0-eksbuild.2"
+  vpc-cni    = "v1.19.2-eksbuild.1"
+}
+eks_endpoint_public_access   = false
+eks_public_access_cidrs      = []
+enable_cluster_creator_admin = true
+
+system_instance_types  = ["m7i.large"]
+online_instance_types  = ["m7i.xlarge", "m6i.xlarge"]
+batch_instance_types   = ["m7i.2xlarge", "m6i.2xlarge", "m6a.2xlarge"]
+sandbox_instance_types = ["m7i.xlarge"]
+enable_gpu_batch        = false
+gpu_batch_instance_types = ["g6.xlarge", "g5.xlarge"]
+
+db_instance_class            = "db.r7g.large"
+db_allocated_storage_gib     = 100
+db_max_allocated_storage_gib = 1000
+db_backup_retention_days     = 14
+db_deletion_protection       = true
+redis_node_type              = "cache.r7g.large"
+
+quarantine_expiration_days = 30
+workload_namespace          = "atlas-rag"
+workload_service_account    = "atlas-rag"
+
+# Reference an account-level GitHub OIDC provider; do not create duplicates per stack.
+create_github_actions_role = false
+github_oidc_provider_arn    = null
+github_repository           = null
+github_environments         = ["staging", "production"]
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "rag"
+  DataClass  = "confidential"
+}

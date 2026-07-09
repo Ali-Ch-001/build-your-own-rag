@@ -1,0 +1,28 @@
+config:
+  ENVIRONMENT: stage
+  AUTH_DISABLED: "false"
+
+api:
+  image:
+    repository: replace-with-staging-api-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+frontend:
+  image:
+    repository: replace-with-staging-frontend-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+ingestionWorker:
+  image:
+    repository: replace-with-staging-api-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+deletionWorker:
+  enabled: false
+  image:
+    repository: replace-with-staging-api-ecr-repository
+    tag: bootstrap
+    digest: ""

@@ -1,0 +1,52 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    {{- toYaml .Values.migrations.annotations | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "migrations") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Values.migrations.serviceAccountName | quote }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "atlas-rag.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "atlas-rag.image" .Values.api.image | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          securityContext:
+            {{- include "atlas-rag.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "atlas-rag.fullname" . }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+                optional: {{ not .Values.externalSecrets.enabled }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+      nodeSelector:
+        {{- toYaml .Values.migrations.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.migrations.tolerations | nindent 8 }}
+{{- end }}

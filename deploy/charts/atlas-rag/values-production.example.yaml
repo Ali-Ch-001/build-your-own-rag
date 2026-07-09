@@ -1,0 +1,153 @@
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: replace-with-platform-contract-workload-role-arn
+
+externalSecrets:
+  enabled: true
+  refreshInterval: 15m
+  secretStore:
+    create: true
+    name: atlas-rag
+    region: us-east-1
+  data:
+    - secretKey: db_username
+      remoteKey: replace-with-rds-managed-secret-arn
+      property: username
+    - secretKey: db_password
+      remoteKey: replace-with-rds-managed-secret-arn
+      property: password
+    - secretKey: db_host
+      remoteKey: replace-with-rds-managed-secret-arn
+      property: host
+    - secretKey: db_port
+      remoteKey: replace-with-rds-managed-secret-arn
+      property: port
+    - secretKey: REDIS_URL
+      remoteKey: replace-with-redis-connection-secret
+      property: url
+    - secretKey: OPENAI_API_KEY
+      remoteKey: /atlas-rag/prod/openai
+      property: api_key
+    - secretKey: TAVILY_API_KEY
+      remoteKey: /atlas-rag/prod/tavily
+      property: api_key
+    - secretKey: AUTH0_DOMAIN
+      remoteKey: /atlas-rag/prod/auth0
+      property: domain
+    - secretKey: AUTH0_AUDIENCE
+      remoteKey: /atlas-rag/prod/auth0
+      property: audience
+    - secretKey: CITATION_HMAC_SECRET
+      remoteKey: /atlas-rag/prod/citation
+      property: hmac_secret
+    - secretKey: QDRANT_API_KEY
+      remoteKey: /atlas-rag/prod/qdrant
+      property: api_key
+  targetTemplate:
+    DATABASE_URL: 'postgresql+asyncpg://{{ .db_username | urlquery }}:{{ .db_password | urlquery }}@{{ .db_host }}:{{ .db_port }}/rag?ssl=require'
+    REDIS_URL: '{{ .REDIS_URL }}'
+    OPENAI_API_KEY: '{{ .OPENAI_API_KEY }}'
+    TAVILY_API_KEY: '{{ .TAVILY_API_KEY }}'
+    AUTH0_DOMAIN: '{{ .AUTH0_DOMAIN }}'
+    AUTH0_AUDIENCE: '{{ .AUTH0_AUDIENCE }}'
+    CITATION_HMAC_SECRET: '{{ .CITATION_HMAC_SECRET }}'
+    QDRANT_API_KEY: '{{ .QDRANT_API_KEY }}'
+
+config:
+  ENVIRONMENT: prod
+  LOG_LEVEL: INFO
+  AUTH_DISABLED: "false"
+  CORS_ORIGINS: https://rag.example.com
+  S3_REGION: us-east-1
+  S3_QUARANTINE_BUCKET: replace-with-platform-contract-quarantine-bucket
+  S3_CLEAN_BUCKET: replace-with-platform-contract-clean-bucket
+  S3_DERIVED_BUCKET: replace-with-platform-contract-derived-bucket
+  S3_FORCE_PATH_STYLE: "false"
+  KAFKA_BOOTSTRAP_SERVERS: replace-with-platform-contract-msk-bootstrap-brokers
+  KAFKA_SECURITY_PROTOCOL: SASL_SSL
+  KAFKA_SASL_MECHANISM: OAUTHBEARER
+  QDRANT_URL: https://replace-with-qdrant-endpoint
+  QDRANT_REPLICATION_FACTOR: "2"
+  MODEL_PROVIDER: openai
+  WEB_SEARCH_ENABLED: "true"
+  OTEL_ENABLED: "true"
+
+api:
+  image:
+    repository: replace-with-api-ecr-repository-uri
+    tag: sha-replace
+    digest: sha256:replace-with-release-digest
+    pullPolicy: IfNotPresent
+  service:
+    annotations:
+      alb.ingress.kubernetes.io/healthcheck-path: /health/live
+
+frontend:
+  image:
+    repository: replace-with-frontend-ecr-repository-uri
+    tag: sha-replace
+    digest: sha256:replace-with-release-digest
+    pullPolicy: IfNotPresent
+  service:
+    annotations:
+      alb.ingress.kubernetes.io/healthcheck-path: /
+  env:
+    NEXT_PUBLIC_API_URL: https://rag.example.com
+
+ingestionWorker:
+  image:
+    repository: replace-with-api-ecr-repository-uri
+    tag: sha-replace
+    digest: sha256:replace-with-release-digest
+    pullPolicy: IfNotPresent
+
+deletionWorker:
+  image:
+    repository: replace-with-api-ecr-repository-uri
+    tag: sha-replace
+    digest: sha256:replace-with-release-digest
+    pullPolicy: IfNotPresent
+
+keda:
+  enabled: true
+  kafka:
+    bootstrapServers: replace-with-platform-contract-msk-bootstrap-brokers
+    tls: enable
+    sasl: aws_msk
+    awsRegion: us-east-1
+  authentication:
+    enabled: true
+    podIdentityProvider: aws
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /v1
+          pathType: Prefix
+          service: api
+        - path: /health
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []
+
+networkPolicy:
+  ingressCidrs:
+    - 10.40.0.0/16
+  privateCidrs:
+    - 10.40.0.0/16
+
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  labels:
+    release: kube-prometheus-stack

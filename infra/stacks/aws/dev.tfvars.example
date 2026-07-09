@@ -1,0 +1,43 @@
+aws_region  = "us-east-1"
+environment = "dev"
+name_prefix = "atlas-rag"
+vpc_cidr    = "10.50.0.0/16"
+
+# A single NAT gateway lowers development cost but is not AZ-resilient.
+nat_gateway_mode    = "single"
+enable_vpc_endpoints = true
+
+eks_cluster_version = "1.32"
+eks_addon_versions = {
+  coredns    = "v1.11.4-eksbuild.2"
+  kube-proxy = "v1.32.0-eksbuild.2"
+  vpc-cni    = "v1.19.2-eksbuild.1"
+}
+eks_endpoint_public_access   = false
+eks_public_access_cidrs      = []
+enable_cluster_creator_admin = true
+
+system_instance_types  = ["m7i.large"]
+online_instance_types  = ["m7i.large", "m6i.large"]
+batch_instance_types   = ["m7i.xlarge", "m6i.xlarge", "m6a.xlarge"]
+sandbox_instance_types = ["m7i.large"]
+enable_gpu_batch        = false
+
+db_instance_class            = "db.t4g.medium"
+db_allocated_storage_gib     = 20
+db_max_allocated_storage_gib = 100
+db_backup_retention_days     = 7
+db_deletion_protection       = false
+redis_node_type              = "cache.t4g.small"
+
+quarantine_expiration_days = 14
+workload_namespace          = "atlas-rag"
+workload_service_account    = "atlas-rag"
+
+create_github_actions_role = false
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "rag-development"
+  DataClass  = "confidential"
+}

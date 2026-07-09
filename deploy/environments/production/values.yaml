@@ -1,0 +1,28 @@
+config:
+  ENVIRONMENT: prod
+  AUTH_DISABLED: "false"
+
+api:
+  image:
+    repository: replace-with-production-api-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+frontend:
+  image:
+    repository: replace-with-production-frontend-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+ingestionWorker:
+  image:
+    repository: replace-with-production-api-ecr-repository
+    tag: bootstrap
+    digest: ""
+
+deletionWorker:
+  enabled: false
+  image:
+    repository: replace-with-production-api-ecr-repository
+    tag: bootstrap
+    digest: ""

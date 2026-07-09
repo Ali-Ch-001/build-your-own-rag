@@ -1,0 +1,4 @@
+aws_region        = "us-east-1"
+state_bucket_name = "replace-me-atlas-rag-terraform-state"
+lock_table_name   = "atlas-rag-terraform-locks"
+force_destroy     = false

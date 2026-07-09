@@ -1,0 +1,67 @@
+config:
+  ENVIRONMENT: local
+  LOG_LEVEL: DEBUG
+  AUTH_DISABLED: "true"
+  CORS_ORIGINS: http://localhost:3000
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_REGION: us-east-1
+  S3_QUARANTINE_BUCKET: rag-quarantine
+  S3_CLEAN_BUCKET: rag-clean
+  S3_DERIVED_BUCKET: rag-derived
+  S3_FORCE_PATH_STYLE: "true"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+  # Qdrant is deployed independently from this application chart.
+  QDRANT_URL: http://qdrant.qdrant.svc.cluster.local:6333
+  QDRANT_REPLICATION_FACTOR: "1"
+  REDIS_URL: redis://redis:6379/0
+  MODEL_PROVIDER: deterministic
+  WEB_SEARCH_ENABLED: "false"
+  OTEL_ENABLED: "false"
+
+externalSecrets:
+  enabled: false
+
+api:
+  replicaCount: 1
+  image:
+    repository: atlas-rag-api
+    tag: local
+    pullPolicy: IfNotPresent
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: atlas-rag-frontend
+    tag: local
+    pullPolicy: IfNotPresent
+  env:
+    NEXT_PUBLIC_API_URL: http://localhost:8000
+
+ingestionWorker:
+  replicaCount: 1
+  image:
+    repository: atlas-rag-api
+    tag: local
+    pullPolicy: IfNotPresent
+
+deletionWorker:
+  enabled: false
+
+autoscaling:
+  api:
+    enabled: false
+  frontend:
+    enabled: false
+
+keda:
+  enabled: false
+
+pdb:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+resourceQuota:
+  enabled: false

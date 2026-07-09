@@ -1,0 +1,76 @@
+{{- if .Values.ingestionWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-ingestion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestion-worker
+spec:
+  replicas: {{ .Values.ingestionWorker.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "ingestion-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "ingestion-worker") | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "atlas-rag.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.ingestionWorker.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- include "atlas-rag.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: ingestion-worker
+          image: {{ include "atlas-rag.image" .Values.ingestionWorker.image | quote }}
+          imagePullPolicy: {{ .Values.ingestionWorker.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.ingestionWorker.command | nindent 12 }}
+          securityContext:
+            {{- include "atlas-rag.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "atlas-rag.fullname" . }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+                optional: {{ not .Values.externalSecrets.enabled }}
+          startupProbe:
+            exec:
+              command: ["python", "-c", "import rag_platform.workers.ingestion"]
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os; os.kill(1, 0)"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.ingestionWorker.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 10Gi
+      nodeSelector:
+        {{- toYaml .Values.ingestionWorker.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.ingestionWorker.tolerations | nindent 8 }}
+      {{- include "atlas-rag.topology" (dict "root" . "component" "ingestion-worker") | nindent 6 }}
+{{- end }}

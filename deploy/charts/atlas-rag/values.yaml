@@ -1,0 +1,295 @@
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: atlas-rag
+  annotations: {}
+
+existingSecret: atlas-rag-runtime
+
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  secretStore:
+    create: false
+    name: atlas-rag
+    region: us-east-1
+  data: []
+  targetTemplate: {}
+
+config:
+  ENVIRONMENT: prod
+  LOG_LEVEL: INFO
+  AUTH_DISABLED: "false"
+  API_HOST: 0.0.0.0
+  API_PORT: "8000"
+  S3_FORCE_PATH_STYLE: "false"
+  KAFKA_CONSUMER_GROUP: rag-ingestion-v1
+  QDRANT_URL: http://qdrant.qdrant.svc.cluster.local:6333
+  QDRANT_COLLECTION_PREFIX: rag_chunks
+  QDRANT_VECTOR_SIZE: "1536"
+  QDRANT_REPLICATION_FACTOR: "2"
+  MODEL_PROVIDER: openai
+  OPENAI_EMBEDDING_MODEL: text-embedding-3-small
+  OPENAI_CHAT_MODEL: gpt-4.1-mini
+  RERANKER_PROVIDER: lexical
+  WEB_SEARCH_ENABLED: "false"
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4317
+
+podAnnotations: {}
+podLabels: {}
+imagePullSecrets: []
+
+api:
+  replicaCount: 3
+  image:
+    repository: atlas-rag-api
+    tag: latest
+    digest: ""
+    pullPolicy: IfNotPresent
+  command: []
+  args:
+    - uvicorn
+    - rag_platform.api.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - "8000"
+    - --proxy-headers
+  service:
+    type: ClusterIP
+    port: 8000
+    annotations: {}
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  terminationGracePeriodSeconds: 120
+  nodeSelector:
+    atlas-rag.io/node-pool: online-cpu
+  tolerations:
+    - key: atlas-rag.io/dedicated
+      operator: Equal
+      value: online-cpu
+      effect: NoSchedule
+
+frontend:
+  replicaCount: 3
+  image:
+    repository: atlas-rag-frontend
+    tag: latest
+    digest: ""
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+    annotations: {}
+  env:
+    NEXT_PUBLIC_API_URL: https://rag.example.com
+    NEXT_PUBLIC_DEFAULT_CORPUS_ID: 00000000-0000-0000-0000-000000000100
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  terminationGracePeriodSeconds: 60
+  serviceAccountName: default
+  nodeSelector:
+    atlas-rag.io/node-pool: online-cpu
+  tolerations:
+    - key: atlas-rag.io/dedicated
+      operator: Equal
+      value: online-cpu
+      effect: NoSchedule
+
+ingestionWorker:
+  enabled: true
+  replicaCount: 0
+  image:
+    repository: atlas-rag-api
+    tag: latest
+    digest: ""
+    pullPolicy: IfNotPresent
+  command:
+    - python
+    - -m
+    - rag_platform.workers.ingestion
+  consumerGroup: rag-ingestion-v1
+  topic: document.accepted.v1
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+      ephemeral-storage: 2Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+      ephemeral-storage: 10Gi
+  terminationGracePeriodSeconds: 300
+  nodeSelector:
+    atlas-rag.io/node-pool: batch-cpu
+  tolerations:
+    - key: atlas-rag.io/dedicated
+      operator: Equal
+      value: batch-cpu
+      effect: NoSchedule
+
+deletionWorker:
+  enabled: true
+  replicaCount: 0
+  image:
+    repository: atlas-rag-api
+    tag: latest
+    digest: ""
+    pullPolicy: IfNotPresent
+  command:
+    - python
+    - -m
+    - rag_platform.workers.deletion
+  consumerGroup: rag-deletion-v1
+  topic: document.delete.requested.v1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+      ephemeral-storage: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+      ephemeral-storage: 5Gi
+  terminationGracePeriodSeconds: 300
+  nodeSelector:
+    atlas-rag.io/node-pool: batch-cpu
+  tolerations:
+    - key: atlas-rag.io/dedicated
+      operator: Equal
+      value: batch-cpu
+      effect: NoSchedule
+
+migrations:
+  enabled: true
+  annotations:
+    helm.sh/hook: post-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    helm.sh/hook-weight: "0"
+  backoffLimit: 4
+  activeDeadlineSeconds: 900
+  serviceAccountName: default
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector:
+    atlas-rag.io/node-pool: online-cpu
+  tolerations:
+    - key: atlas-rag.io/dedicated
+      operator: Equal
+      value: online-cpu
+      effect: NoSchedule
+
+autoscaling:
+  api:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 65
+    targetMemoryUtilizationPercentage: 75
+  frontend:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+
+keda:
+  enabled: true
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 0
+  maxReplicaCount: 100
+  kafka:
+    bootstrapServers: kafka:9092
+    lagThreshold: "100"
+    activationLagThreshold: "1"
+    offsetResetPolicy: earliest
+    allowIdleConsumers: "false"
+    tls: disable
+    sasl: plaintext
+    awsRegion: ""
+  authentication:
+    enabled: false
+    podIdentityProvider: aws
+
+pdb:
+  enabled: true
+  api:
+    minAvailable: 2
+  frontend:
+    minAvailable: 2
+  workers:
+    maxUnavailable: 1
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /v1
+          pathType: Prefix
+          service: api
+        - path: /health
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []
+
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  monitoringNamespace: observability
+  ingressCidrs: []
+  privateCidrs:
+    - 10.0.0.0/8
+  privatePorts:
+    - 443
+    - 5432
+    - 6333
+    - 6379
+    - 9098
+    - 4317
+  allowPublicHttps: true
+
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "100"
+    requests.memory: 256Gi
+    limits.cpu: "300"
+    limits.memory: 768Gi
+    requests.ephemeral-storage: 100Gi
+    limits.ephemeral-storage: 500Gi
+    pods: "250"
+    services: "20"
+    secrets: "30"
+    configmaps: "30"
+    count/jobs.batch: "20"
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  labels: {}

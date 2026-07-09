@@ -1,0 +1,76 @@
+{{- if .Values.deletionWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "atlas-rag.fullname" . }}-deletion-worker
+  labels:
+    {{- include "atlas-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: deletion-worker
+spec:
+  replicas: {{ .Values.deletionWorker.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "deletion-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "atlas-rag.selectorLabels" (dict "root" . "component" "deletion-worker") | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "atlas-rag.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.deletionWorker.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- include "atlas-rag.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: deletion-worker
+          image: {{ include "atlas-rag.image" .Values.deletionWorker.image | quote }}
+          imagePullPolicy: {{ .Values.deletionWorker.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.deletionWorker.command | nindent 12 }}
+          securityContext:
+            {{- include "atlas-rag.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "atlas-rag.fullname" . }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+                optional: {{ not .Values.externalSecrets.enabled }}
+          startupProbe:
+            exec:
+              command: ["python", "-c", "import rag_platform.workers.deletion"]
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os; os.kill(1, 0)"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.deletionWorker.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 5Gi
+      nodeSelector:
+        {{- toYaml .Values.deletionWorker.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.deletionWorker.tolerations | nindent 8 }}
+      {{- include "atlas-rag.topology" (dict "root" . "component" "deletion-worker") | nindent 6 }}
+{{- end }}

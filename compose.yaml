@@ -1,0 +1,269 @@
+name: atlas-rag
+
+x-backend-environment: &backend-environment
+  ENVIRONMENT: local
+  LOG_LEVEL: INFO
+  AUTH_DISABLED: "true"
+  DEV_TENANT_ID: ${DEV_TENANT_ID:-00000000-0000-0000-0000-000000000001}
+  DEV_SUBJECT_ID: ${DEV_SUBJECT_ID:-local-developer}
+  DATABASE_URL: postgresql+asyncpg://rag:rag-local-password@postgres:5432/rag
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_REGION: us-east-1
+  S3_ACCESS_KEY_ID: minioadmin
+  S3_SECRET_ACCESS_KEY: minioadmin-local-only
+  S3_QUARANTINE_BUCKET: rag-quarantine
+  S3_CLEAN_BUCKET: rag-clean
+  S3_DERIVED_BUCKET: rag-derived
+  S3_FORCE_PATH_STYLE: "true"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
+  QDRANT_REPLICATION_FACTOR: 1
+  REDIS_URL: redis://redis:6379/0
+  MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+  OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
+  RERANKER_PROVIDER: ${RERANKER_PROVIDER:-lexical}
+  WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-false}
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+  CITATION_HMAC_SECRET: ${CITATION_HMAC_SECRET:-local-citation-secret-change-in-production}
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+services:
+  postgres:
+    image: postgres:16.9-alpine
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag-local-password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack-server:7.4.0-v8
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin-local-only
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://:29093,INTERNAL://:29092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 12
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+    environment: *backend-environment
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+  ingestion-worker:
+    build:
+      context: .
+    command: ["python", "-m", "rag_platform.workers.ingestion"]
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+  deletion-worker:
+    build:
+      context: .
+    command: ["python", "-m", "rag_platform.workers.deletion"]
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_DEFAULT_CORPUS_ID: ${NEXT_PUBLIC_DEFAULT_CORPUS_ID:-00000000-0000-0000-0000-000000000100}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_DEFAULT_CORPUS_ID: ${NEXT_PUBLIC_DEFAULT_CORPUS_ID:-00000000-0000-0000-0000-000000000100}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    profiles: ["graph"]
+    environment:
+      NEO4J_AUTH: neo4j/neo4j-local-password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: ["security"]
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-data:/var/lib/clamav
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.130.1
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafana-local-only
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  qdrant-data:
+  kafka-data:
+  neo4j-data:
+  clamav-data:
+  prometheus-data:
+  grafana-data:
