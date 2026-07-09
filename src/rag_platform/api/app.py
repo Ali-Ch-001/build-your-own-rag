@@ -8,6 +8,8 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from rag_platform.adapters.events import EventProducer, OutboxPublisher
 from rag_platform.api.dependencies import (
@@ -22,7 +24,7 @@ from rag_platform.api.responses import router as responses_router
 from rag_platform.api.search import router as search_router
 from rag_platform.config import get_settings
 from rag_platform.logging import configure_logging
-from rag_platform.telemetry import configure_telemetry
+from rag_platform.telemetry import configure_prometheus, configure_telemetry
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -81,4 +83,10 @@ app.include_router(health_router)
 app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(responses_router)
+configure_prometheus(app)
 configure_telemetry(app, settings)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

@@ -1,4 +1,4 @@
-.PHONY: install format lint test migrate api worker compose-up compose-down
+.PHONY: install format lint test migrate api worker compose-up compose-down quickstart status smoke down clean-local
 
 install:
 	uv sync
@@ -29,3 +29,20 @@ compose-up:
 
 compose-down:
 	docker compose down
+
+quickstart:
+	./scripts/quickstart.sh
+
+status:
+	docker compose ps
+
+smoke:
+	curl -fsS http://localhost:8000/health/live
+	curl -fsS http://localhost:8000/health/ready
+	curl -fsS http://localhost:3000 >/dev/null
+
+down:
+	docker compose down
+
+clean-local:
+	docker compose down --volumes --remove-orphans
