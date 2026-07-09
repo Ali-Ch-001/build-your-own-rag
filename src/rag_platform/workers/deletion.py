@@ -67,7 +67,9 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
 
-    async with EventConsumer(settings, "document.delete.requested.v1", "rag-deletion-v1") as consumer:
+    async with EventConsumer(
+        settings, "document.delete.requested.v1", "rag-deletion-v1"
+    ) as consumer:
         async for payload in consumer.events():
             if stop.is_set():
                 break

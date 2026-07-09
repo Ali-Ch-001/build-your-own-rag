@@ -27,6 +27,6 @@ The frontend's `NEXT_PUBLIC_*` values are compiled into the image by Next.js. Bu
 
 Qdrant is always external to this release. Set `config.QDRANT_URL` to Qdrant Cloud or an independently operated cluster with tested shard placement, replication, snapshots, restore, encryption, and capacity. The chart deliberately embeds neither an operator nor a Qdrant workload.
 
-## Current application constraint
+## AWS IAM data connections
 
-The current Python Kafka and Redis adapters need IAM token-provider support before they can connect to the Terraform stack's MSK Serverless and ElastiCache IAM endpoints. Keep affected workloads disabled until that application support is available; do not weaken managed-service authentication as a workaround.
+Set `KAFKA_AWS_MSK_IAM=true` and the `REDIS_IAM_*` values from the Terraform platform contract. The application generates short-lived MSK OAuth and ElastiCache SigV4 credentials from IRSA, so no static broker or cache passwords belong in the runtime secret.

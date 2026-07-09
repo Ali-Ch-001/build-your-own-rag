@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import orjson
 import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer  # type: ignore[import-untyped]
+from aiokafka.abc import AbstractTokenProvider  # type: ignore[import-untyped]
+from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
 from sqlalchemy import select
 
 from rag_platform.config import Settings
@@ -16,7 +19,22 @@ from rag_platform.db.session import SessionFactory
 logger = structlog.get_logger(__name__)
 
 
-def _kafka_auth(settings: Settings) -> dict[str, str | None]:
+class MskIamTokenProvider(AbstractTokenProvider):
+    def __init__(self, region: str) -> None:
+        self.region = region
+
+    async def token(self) -> str:
+        token, _ = await asyncio.to_thread(MSKAuthTokenProvider.generate_auth_token, self.region)
+        return token
+
+
+def _kafka_auth(settings: Settings) -> dict[str, Any]:
+    if settings.kafka_aws_msk_iam:
+        return {
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": "OAUTHBEARER",
+            "sasl_oauth_token_provider": MskIamTokenProvider(settings.aws_region),
+        }
     return {
         "security_protocol": settings.kafka_security_protocol,
         "sasl_mechanism": settings.kafka_sasl_mechanism,

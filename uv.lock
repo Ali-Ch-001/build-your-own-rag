@@ -263,6 +263,20 @@ wheels = [
 ]
 
 [[package]]
+name = "aws-msk-iam-sasl-signer-python"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "botocore" },
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/8b/9af0a7def4ba357afadc89c06019d3735944cb3d6065a455f41580ba7fd6/aws_msk_iam_sasl_signer_python-1.0.2.tar.gz", hash = "sha256:3432d88a7c6db4887ceb1130ebaed0113bfda48b79ea811537add5f1d25fa13f", size = 24034, upload-time = "2025-03-05T20:49:48.582Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/43/f3ffd79fc4941b8d610530d81e1f600cfa1b8651affc25cb929fd0f2f2c9/aws_msk_iam_sasl_signer_python-1.0.2-py2.py3-none-any.whl", hash = "sha256:310eb2db9ca0ff55ed06a24212739b87533e7f1cf6f34e43aabbd97a3b21290e", size = 13279, upload-time = "2025-03-05T20:49:46.611Z" },
+]
+
+[[package]]
 name = "boto3"
 version = "1.40.61"
 source = { registry = "https://pypi.org/simple" }
@@ -928,6 +942,7 @@ dependencies = [
     { name = "aiokafka" },
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "aws-msk-iam-sasl-signer-python" },
     { name = "fastapi" },
     { name = "greenlet" },
     { name = "httpx" },
@@ -986,6 +1001,7 @@ requires-dist = [
     { name = "aiokafka", specifier = ">=0.12,<1" },
     { name = "alembic", specifier = ">=1.16,<2" },
     { name = "asyncpg", specifier = ">=0.30,<1" },
+    { name = "aws-msk-iam-sasl-signer-python", specifier = ">=1.0.2,<2" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "greenlet", specifier = ">=3.2,<4" },
     { name = "httpx", specifier = ">=0.28,<1" },

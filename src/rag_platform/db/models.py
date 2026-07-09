@@ -9,7 +9,9 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    Boolean,
     ForeignKeyConstraint,
+    Float,
     Index,
     Integer,
     LargeBinary,
@@ -213,3 +215,21 @@ class RetrievalLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class RetrievalRequestLog(Base):
+    __tablename__ = "retrieval_request_logs"
+
+    request_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    query_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    total_latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    cache_hit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    cache_type: Mapped[str | None] = mapped_column(String(20))
+    partial: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    result_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_retrieval_requests_tenant_created", "tenant_id", "created_at"),)
