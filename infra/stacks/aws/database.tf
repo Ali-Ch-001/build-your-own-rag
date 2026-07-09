@@ -18,7 +18,7 @@ resource "aws_security_group" "postgresql" {
 
 module "postgresql" {
   source  = "terraform-aws-modules/rds/aws"
-  version = "6.12.0"
+  version = "7.2.0"
 
   identifier = "${local.name}-postgresql"
 
