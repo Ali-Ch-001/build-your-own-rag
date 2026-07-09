@@ -96,7 +96,7 @@ jobs:
           category: trivy-${{ matrix.name }}
       - name: Generate SBOM
         if: always()
-        uses: anchore/sbom-action@v0.20.4
+        uses: anchore/sbom-action@v0.24.0
         with:
           image: atlas-rag-${{ matrix.name }}:ci
           format: spdx-json
