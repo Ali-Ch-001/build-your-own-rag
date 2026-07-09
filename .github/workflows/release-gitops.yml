@@ -77,7 +77,7 @@ jobs:
           test -n "$NEXT_PUBLIC_AUTH0_DOMAIN"
           test -n "$NEXT_PUBLIC_AUTH0_CLIENT_ID"
           test -n "$NEXT_PUBLIC_AUTH0_AUDIENCE"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - id: api
         name: Build and publish API image
         uses: docker/build-push-action@v6
