@@ -33,10 +33,10 @@ class Settings(BaseSettings):
     database_pool_size: int = 10
     database_max_overflow: int = 20
 
-    s3_endpoint_url: str | None = "http://localhost:9000"
+    s3_endpoint_url: str | None = None
     s3_region: str = "us-east-1"
-    s3_access_key_id: str | None = "minioadmin"
-    s3_secret_access_key: str | None = "minioadmin-local-only"  # noqa: S105
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
     s3_quarantine_bucket: str = "rag-quarantine"
     s3_clean_bucket: str = "rag-clean"
     s3_derived_bucket: str = "rag-derived"
@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     kafka_sasl_username: str | None = None
     kafka_sasl_password: str | None = None
     kafka_consumer_group: str = "rag-ingestion-v1"
+    kafka_aws_msk_iam: bool = False
+    aws_region: str = "us-east-1"
 
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
@@ -56,6 +58,9 @@ class Settings(BaseSettings):
     qdrant_replication_factor: int = 1
 
     redis_url: str = "redis://localhost:6379/0"
+    redis_iam_enabled: bool = False
+    redis_iam_user: str | None = None
+    redis_iam_cache_name: str | None = None
     cache_volatile_ttl_seconds: int = 3600
     cache_stable_ttl_seconds: int = 86400
     semantic_cache_threshold: float = 0.93
@@ -124,6 +129,10 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_API_KEY is required when MODEL_PROVIDER=openai")
         if self.web_search_enabled and not self.tavily_api_key:
             raise ValueError("TAVILY_API_KEY is required when WEB_SEARCH_ENABLED=true")
+        if self.redis_iam_enabled and (not self.redis_iam_user or not self.redis_iam_cache_name):
+            raise ValueError(
+                "REDIS_IAM_USER and REDIS_IAM_CACHE_NAME are required when Redis IAM is enabled"
+            )
         if not 0.0 < self.context_evidence_ratio <= 0.70:
             raise ValueError("CONTEXT_EVIDENCE_RATIO must be in (0, 0.70]")
         if not 0.0 <= self.mmr_lambda <= 1.0:

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from array import array
 from dataclasses import dataclass
+from time import monotonic
+from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
+import botocore.session  # type: ignore[import-untyped]
 import redis.asyncio as redis
+from botocore.model import ServiceId  # type: ignore[import-untyped]
+from botocore.signers import RequestSigner  # type: ignore[import-untyped]
+from redis.credentials import CredentialProvider
 from redis.exceptions import ResponseError
 
 from rag_platform.config import Settings
@@ -18,11 +25,62 @@ class SemanticCacheHit:
     similarity: float
 
 
+class ElastiCacheIamCredentialProvider(CredentialProvider):
+    def __init__(self, user_id: str, cache_name: str, region: str) -> None:
+        self.user_id = user_id
+        self.cache_name = cache_name.lower()
+        self.region = region
+        self._session = botocore.session.get_session()
+        self._credentials: tuple[str, str] | None = None
+        self._expires_at = 0.0
+
+    def get_credentials(self) -> tuple[str, str]:
+        if self._credentials and monotonic() < self._expires_at:
+            return self._credentials
+        credentials = self._session.get_credentials()
+        if credentials is None:
+            raise RuntimeError("AWS workload credentials are unavailable for Redis IAM")
+        signer = RequestSigner(
+            ServiceId("elasticache"),
+            self.region,
+            "elasticache",
+            "v4",
+            credentials,
+            self._session.get_component("event_emitter"),
+        )
+        query = urlencode({"Action": "connect", "User": self.user_id})
+        signed_url = signer.generate_presigned_url(
+            {
+                "method": "GET",
+                "url": f"http://{self.cache_name}/?{query}",
+                "body": {},
+                "headers": {},
+                "context": {},
+            },
+            operation_name="connect",
+            expires_in=900,
+            region_name=self.region,
+        )
+        self._credentials = (self.user_id, signed_url.removeprefix("http://"))
+        self._expires_at = monotonic() + 840
+        return self._credentials
+
+    async def get_credentials_async(self) -> tuple[str, str]:
+        return await asyncio.to_thread(self.get_credentials)
+
+
 class CacheStore:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        client_options: dict[str, object] = {"decode_responses": False}
+        if settings.redis_iam_enabled:
+            client_options["credential_provider"] = ElastiCacheIamCredentialProvider(
+                settings.redis_iam_user or "",
+                settings.redis_iam_cache_name or "",
+                settings.aws_region,
+            )
         self.client = redis.from_url(  # type: ignore[no-untyped-call]
-            settings.redis_url, decode_responses=False
+            settings.redis_url, **client_options
         )
         self.semantic_index = f"rag_semantic_cache_{settings.qdrant_vector_size}"
 

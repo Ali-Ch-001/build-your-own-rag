@@ -18,6 +18,13 @@ class DenseHit:
     score: float
 
 
+@dataclass(frozen=True, slots=True)
+class VectorStats:
+    points_count: int
+    indexed_vectors_count: int
+    estimated_size_gb: float
+
+
 class VectorStore:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -175,4 +182,16 @@ class VectorStore:
                 )
             ),
             wait=True,
+        )
+
+    async def stats(self) -> VectorStats:
+        info = await self.client.get_collection(self.collection)
+        points = int(info.points_count or 0)
+        indexed = int(info.indexed_vectors_count or 0)
+        raw_bytes = points * self.settings.qdrant_vector_size * 4
+        estimated_bytes = raw_bytes * 1.8 * self.settings.qdrant_replication_factor
+        return VectorStats(
+            points_count=points,
+            indexed_vectors_count=indexed,
+            estimated_size_gb=round(estimated_bytes / (1024**3), 3),
         )

@@ -43,6 +43,7 @@ output "platform_contract" {
       endpoint       = aws_elasticache_replication_group.this.primary_endpoint_address
       port           = aws_elasticache_replication_group.this.port
       username       = aws_elasticache_user.application.user_name
+      cache_name     = aws_elasticache_replication_group.this.replication_group_id
       authentication = "iam"
       tls_required   = true
     }

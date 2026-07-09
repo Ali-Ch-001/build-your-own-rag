@@ -16,7 +16,7 @@ from rag_platform.adapters.embeddings import EmbeddingProvider
 from rag_platform.adapters.graph_store import GraphHit
 from rag_platform.adapters.vector_store import DenseHit, VectorStore
 from rag_platform.config import Settings
-from rag_platform.db.models import Chunk, Document, RetrievalLog
+from rag_platform.db.models import Chunk, Document, RetrievalLog, RetrievalRequestLog
 from rag_platform.db.tenant import set_tenant_context
 from rag_platform.domain.models import Citation, SearchRequest, SearchResponse, SearchResult
 from rag_platform.retrieval.context import extractive_compress, select_mmr
@@ -63,6 +63,7 @@ class RetrievalService:
             request.filters.model_dump_json().encode() + epoch.encode() + graph_scope.encode()
         ).hexdigest()
         canonical_query = " ".join(request.query.lower().split())
+        query_hash = hashlib.sha256(canonical_query.encode()).hexdigest()
         exact_key = hashlib.sha256(
             (
                 f"{auth.tenant_id}|{acl_fingerprint}|{scope_hash}|{canonical_query}|"
@@ -71,10 +72,10 @@ class RetrievalService:
         ).hexdigest()
         if cached := await self.cache.get_exact(exact_key):
             response = SearchResponse.model_validate_json(cached)
-            response.cache_hit = True
-            return response
+            return await self._record_cache_hit(
+                session, auth, response, query_hash, started, "exact"
+            )
 
-        query_hash = hashlib.sha256(canonical_query.encode()).hexdigest()
         query_vector = await self.cache.get_embedding(self.embeddings.model_name, query_hash)
         if query_vector is None:
             query_vector = await self.embeddings.embed_query(request.query)
@@ -88,9 +89,10 @@ class RetrievalService:
         )
         if semantic:
             response = SearchResponse.model_validate_json(semantic.payload)
-            response.cache_hit = True
             response.timings_ms["semantic_cache_similarity"] = semantic.similarity
-            return response
+            return await self._record_cache_hit(
+                session, auth, response, query_hash, started, "semantic"
+            )
 
         sparse_task = asyncio.create_task(self._sparse_search(session, auth, request))
         dense_task = asyncio.create_task(
@@ -153,6 +155,7 @@ class RetrievalService:
             for rank, item in enumerate(selected, start=1)
         ]
         request_id = uuid4()
+        total_latency_ms = round((time.perf_counter() - started) * 1000, 2)
         session.add_all(
             [
                 RetrievalLog(
@@ -169,13 +172,25 @@ class RetrievalService:
                 )
                 for item in reranked
             ]
+            + [
+                RetrievalRequestLog(
+                    request_id=request_id,
+                    tenant_id=auth.tenant_id,
+                    query_hash=query_hash,
+                    total_latency_ms=total_latency_ms,
+                    cache_hit=False,
+                    cache_type=None,
+                    partial=partial,
+                    result_count=len(response_results),
+                )
+            ]
         )
         await session.commit()
         response = SearchResponse(
             request_id=request_id,
             results=response_results,
             partial=partial,
-            timings_ms={"total": round((time.perf_counter() - started) * 1000, 2)},
+            timings_ms={"total": total_latency_ms},
         )
         payload = response.model_dump_json()
         await self.cache.set_exact(exact_key, payload)
@@ -186,6 +201,34 @@ class RetrievalService:
             query_vector=query_vector,
             payload=payload,
         )
+        return response
+
+    async def _record_cache_hit(
+        self,
+        session: AsyncSession,
+        auth: AuthContext,
+        response: SearchResponse,
+        query_hash: str,
+        started: float,
+        cache_type: str,
+    ) -> SearchResponse:
+        response.request_id = uuid4()
+        response.cache_hit = True
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        response.timings_ms = {**response.timings_ms, "total": latency_ms}
+        session.add(
+            RetrievalRequestLog(
+                request_id=response.request_id,
+                tenant_id=auth.tenant_id,
+                query_hash=query_hash,
+                total_latency_ms=latency_ms,
+                cache_hit=True,
+                cache_type=cache_type,
+                partial=response.partial,
+                result_count=len(response.results),
+            )
+        )
+        await session.commit()
         return response
 
     async def _sparse_search(

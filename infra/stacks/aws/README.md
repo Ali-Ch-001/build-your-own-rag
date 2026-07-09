@@ -53,7 +53,7 @@ Use separate backend keys and variable files for each environment and region. Re
 
 Terraform creates metadata-only secrets at `/atlas-rag/<environment>/{openai,tavily,auth0,citation,qdrant}` and does not create a secret version. Populate JSON values through an approved secret-management workflow after apply. RDS creates and rotates its own master credential. Never pass provider keys or passwords through `.tfvars`, plan files, or Terraform outputs.
 
-MSK Serverless and ElastiCache use IAM authentication through the pod IRSA role. The current Python adapters require IAM token-provider integration before those production endpoints can be used directly; do not weaken the managed services to plaintext or unauthenticated modes as a workaround.
+MSK Serverless and ElastiCache use IAM authentication through the pod IRSA role. The Python adapters generate short-lived MSK OAuth and ElastiCache SigV4 credentials from the workload identity; do not add static broker/cache passwords or weaken transport security.
 
 ## Cost and operations
 

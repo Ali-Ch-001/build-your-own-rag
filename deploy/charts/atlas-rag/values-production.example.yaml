@@ -22,9 +22,6 @@ externalSecrets:
     - secretKey: db_port
       remoteKey: replace-with-rds-managed-secret-arn
       property: port
-    - secretKey: REDIS_URL
-      remoteKey: replace-with-redis-connection-secret
-      property: url
     - secretKey: OPENAI_API_KEY
       remoteKey: /atlas-rag/prod/openai
       property: api_key
@@ -45,7 +42,6 @@ externalSecrets:
       property: api_key
   targetTemplate:
     DATABASE_URL: 'postgresql+asyncpg://{{ .db_username | urlquery }}:{{ .db_password | urlquery }}@{{ .db_host }}:{{ .db_port }}/rag?ssl=require'
-    REDIS_URL: '{{ .REDIS_URL }}'
     OPENAI_API_KEY: '{{ .OPENAI_API_KEY }}'
     TAVILY_API_KEY: '{{ .TAVILY_API_KEY }}'
     AUTH0_DOMAIN: '{{ .AUTH0_DOMAIN }}'
@@ -66,6 +62,12 @@ config:
   KAFKA_BOOTSTRAP_SERVERS: replace-with-platform-contract-msk-bootstrap-brokers
   KAFKA_SECURITY_PROTOCOL: SASL_SSL
   KAFKA_SASL_MECHANISM: OAUTHBEARER
+  KAFKA_AWS_MSK_IAM: "true"
+  AWS_REGION: us-east-1
+  REDIS_URL: rediss://replace-with-platform-contract-redis-endpoint:6379/0
+  REDIS_IAM_ENABLED: "true"
+  REDIS_IAM_USER: atlas-application
+  REDIS_IAM_CACHE_NAME: replace-with-platform-contract-redis-cache-name
   QDRANT_URL: https://replace-with-qdrant-endpoint
   QDRANT_REPLICATION_FACTOR: "2"
   MODEL_PROVIDER: openai

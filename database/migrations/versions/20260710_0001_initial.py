@@ -14,7 +14,10 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    Base.metadata.create_all(bind=bind)
+    initial_tables = [
+        table for name, table in Base.metadata.tables.items() if name != "retrieval_request_logs"
+    ]
+    Base.metadata.create_all(bind=bind, tables=initial_tables)
 
     for table in (
         "documents",
