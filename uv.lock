@@ -1097,6 +1097,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "testcontainers", extra = ["redis"] },
 ]
 
 [package.metadata]
@@ -1153,6 +1154,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.1,<2" },
     { name = "pytest-cov", specifier = ">=6.2,<7" },
     { name = "ruff", specifier = ">=0.12,<1" },
+    { name = "testcontainers", extras = ["postgres", "redis"], specifier = ">=4.12,<5" },
 ]
 
 [[package]]

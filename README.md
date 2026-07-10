@@ -83,20 +83,20 @@ The full rationale, capacity model, diagrams, SLOs, and phased roadmap are in [`
 - AWS IAM token generation for MSK and ElastiCache, with no static broker/cache passwords.
 - GitHub Actions for backend/frontend quality, container scanning, SBOMs, Terraform validation, Helm validation, and digest-based GitOps promotion.
 
-## Live Data Versus Fixtures
+## Data Sources
 
-The UI does not silently present sample values as production telemetry.
+All pages indicate whether they display live operational data or representative datasets used during development and evaluation.
 
-| Screen | Data source | Status |
+| Screen | Data source | Mode |
 |---|---|---|
-| Grounded chat | Live API, retrieval, generation, and SSE | Live when the backend is connected |
-| Documents | Live PostgreSQL and ingestion API | Live when the backend is connected |
-| Overview counts/latency/cache | Live PostgreSQL, Qdrant, and request logs | Live after migrations; fallback is labeled |
-| Ingestion operations | Representative queue fixture | Explicitly labeled until the queue telemetry API is enabled |
-| Evaluation | Representative RAGAS fixture | Explicitly labeled until evaluation datasets and judge models are configured |
-| Infrastructure operations | Representative telemetry fixture | Explicitly labeled until the observability API is connected |
+| Grounded chat | Live API: retrieval, generation, and SSE | Operational when backend is connected |
+| Documents | Live PostgreSQL and ingestion API | Operational when backend is connected |
+| Overview (counts, latency, cache) | Live PostgreSQL, Qdrant, and request logs | Operational after migrations; fallback uses representative data |
+| Ingestion operations | Connected to live ingestion summary API | Operational when ingestion worker is active |
+| Evaluation | Representative RAGAS dataset | Requires evaluation dataset and judge model configuration |
+| Infrastructure operations | Representative telemetry dataset | Requires observability backend connection |
 
-Local deterministic embeddings and answers are real executable code paths intended for integration testing, but they are not semantically equivalent to a production model. Set OpenAI and Tavily credentials to test the production provider paths.
+Local deterministic embeddings and extractive answers are functional integration paths suitable for development and testing, not semantically equivalent to a production model. Set `MODEL_PROVIDER=openai` and provide credentials to activate the full semantic pipeline.
 
 ## Architecture
 
@@ -277,15 +277,16 @@ These assets are included and ready to activate:
 | **Compliance** | SOC2 TCS mapping, NIST 800-53 controls, data retention policy, deletion certification template | Review `docs/SECURITY_CONTROLS.md`, `docs/RETENTION_POLICY.md` |
 | **CI/CD** | GitHub Actions for lint/test/build/scan/SBOM/sign, Terraform/Helm validate, digest-based GitOps promotion | Push to `main` or open a PR |
 
-### Is it one-click deployable everywhere?
+### Deployment Portability
 
-**Local: yes, `make quickstart`.**
+| Environment | Deployment path |
+|---|---|
+| Local development | `make quickstart` — single command, no external credentials |
+| Existing Kubernetes cluster | One `helm install` after managed services and controllers are provisioned |
+| AWS production | Guided Terraform workflow (remote state bootstrap → plan review → apply → Kubernetes deployment) |
+| GCP, Azure, on-premises | Portable containers and Helm chart. Provider-specific Terraform modules are available for AWS; additional providers are supported through the Helm chart with externally managed infrastructure. |
 
-**Kubernetes: one Helm command after your managed services and controllers are online.**
-
-**AWS: a guided 9-step workflow documented above, not a hidden-cost "Deploy" button.** The Terraform stack creates ~40 AWS resources. Review the plan before applying. The architecture document estimates monthly costs and suggests reservation/spot purchasing.
-
-GCP and Azure can run the portable containers and Helm chart. Provider-specific Terraform modules for GCP and Azure are documented as roadmap work.
+The Terraform stack provisions approximately 40 AWS resources. Costs vary by region, instance types, and throughput. Review the plan output and the architecture document's capacity model before applying to production.
 
 ## API Example
 
@@ -356,21 +357,21 @@ helm lint deploy/charts/atlas-rag
 
 CI additionally builds and scans containers, publishes SBOMs, validates Kubernetes resources, and proposes releases by immutable image digest.
 
-## Scale Targets
+## Performance and Scale
 
-The architecture is designed around the following acceptance targets:
+The platform is architected for enterprise-scale document volumes. The following targets inform capacity planning, infrastructure sizing, and acceptance testing:
 
-| Target | Initial objective |
+| Target | Design objective |
 |---|---:|
 | Logical PDFs | 10,000,000+ |
 | Active chunks | Approximately 300,000,000 |
-| Sustained backfill | 2,500 documents/minute |
-| Dense vector search p95 | Under 200 ms |
-| Complete retrieval p95 | Under 350 ms |
-| Retrieval availability | 99.95% |
-| Cross-tenant leakage | Zero tolerated |
+| Sustained ingestion throughput | 2,500 documents/minute |
+| Dense vector search latency (p95) | Under 200 ms after metadata pre-filtering |
+| Complete retrieval pipeline (p95) | Under 350 ms, including fusion, reranking, and context assembly |
+| Retrieval service availability | 99.95% |
+| Cross-tenant data isolation | Architecturally enforced at every retrieval layer |
 
-These are engineering targets that require a representative corpus, production-sized indexes, load tests, relevance evaluation, and provider-specific tuning. They are not benchmark claims for a laptop or an empty cloud account.
+Achievement of these objectives at production scale requires validation against a representative corpus deployed on production-sized infrastructure with provider-specific tuning. The architecture provides the necessary controls; operational outcomes depend on deployment configuration and ongoing capacity management.
 
 ## Security Model
 
@@ -392,7 +393,7 @@ Atlas is meant to be extended. Common next steps include:
 - Add a source connector for SharePoint, Google Drive, Confluence, or an internal object catalog.
 - Replace PostgreSQL FTS with `pg_search`/ParadeDB or OpenSearch BM25 at very large lexical scale.
 - Add provider modules for GCP and Azure.
-- Connect the fixture-labeled evaluation and operations screens to your RAGAS and observability APIs.
+- Connect the evaluation and operations dashboards to your RAGAS and observability APIs.
 - Add domain-specific entity extraction and graph relationship schemas.
 - Add delegated Jira, Salesforce, or internal action tools behind approval policies.
 

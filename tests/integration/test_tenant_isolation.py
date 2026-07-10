@@ -21,10 +21,12 @@ def testcontainers_postgres():
     """Spin up a real PostgreSQL container for integration tests."""
     from testcontainers.postgres import PostgresContainer
 
-    container = PostgresContainer("postgres:16.9-alpine")
-    container.with_env("POSTGRES_DB", "rag_test")
-    container.with_env("POSTGRES_USER", "rag")
-    container.with_env("POSTGRES_PASSWORD", "rag-test-password")
+    container = PostgresContainer(
+        "postgres:16.9-alpine",
+        username="rag",
+        password="rag-test-password",
+        dbname="rag_test",
+    )
     container.start()
     yield container
     container.stop()
@@ -44,16 +46,17 @@ async def testcontainers_session(testcontainers_postgres):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        for table in ("documents", "document_versions", "sections", "chunks"):
-            await conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
-            await conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
-            await conn.execute(
-                text(
-                    f"CREATE POLICY {table}_tenant_policy ON {table} "
-                    f"USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) "
-                    f"WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)"
+        for table in Base.metadata.tables:
+            if table in ("documents", "document_versions", "sections", "chunks"):
+                await conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+                await conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
+                await conn.execute(
+                    text(
+                        f"CREATE POLICY {table}_tenant_policy ON {table} "
+                        f"USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) "
+                        f"WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)"
+                    )
                 )
-            )
 
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
