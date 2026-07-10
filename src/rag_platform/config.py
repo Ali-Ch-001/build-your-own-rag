@@ -98,9 +98,14 @@ class Settings(BaseSettings):
     clamav_host: str = "localhost"
     clamav_port: int = 3310
 
-    embedding_max_concurrency: int = 8
-    qdrant_write_rate_per_second: float = 20.0
-    qdrant_write_burst: int = 50
+    # Backpressure and scaling controls.
+    # Tune up for production (see docs/SCALING.md):
+    #   10K docs:   embedding_max_concurrency=48,  qdrant_write_rate=200
+    #   100K docs:  embedding_max_concurrency=128, qdrant_write_rate=1000
+    #   1M+ docs:   deploy dedicated GPU embedding nodes, pre-create 64 Qdrant shards
+    embedding_max_concurrency: int = 48
+    qdrant_write_rate_per_second: float = 100.0
+    qdrant_write_burst: int = 200
     ingestion_backpressure_p95_threshold_ms: float = 500.0
 
     sparse_candidates: int = 50
