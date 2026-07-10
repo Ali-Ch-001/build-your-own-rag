@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
@@ -77,12 +76,11 @@ def auth_settings(auth0_domain: str, auth0_audience: str) -> Settings:
         auth0_domain=auth0_domain,
         auth0_audience=auth0_audience,
         auth0_algorithms="RS256",
-        citation_hmac_secret="prod-citation-secret-not-local-prefix",
+        citation_hmac_secret="prod-citation-secret-not-local-prefix",  # noqa: S106
     )
 
 
 def _build_jwk(public_key: rsa.RSAPublicKey, kid: str) -> dict:
-    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     from jwt.utils import base64url_encode
 
     pub_numbers = public_key.public_numbers()
@@ -409,7 +407,7 @@ async def test_missing_credentials_in_production_returns_401() -> None:
         auth_disabled=False,
         auth0_domain="atlas-rag.auth0.com",
         auth0_audience="https://api.atlas-rag.example.com",
-        citation_hmac_secret="prod-citation-secret-not-local-prefix",
+        citation_hmac_secret="prod-citation-secret-not-local-prefix",  # noqa: S106
     )
     request = MagicMock()
 
