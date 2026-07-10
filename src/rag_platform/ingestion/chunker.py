@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import tiktoken
 
 from rag_platform.domain.models import ChunkDraft, ExtractionMethod, SourceSpan
-from rag_platform.ingestion.parser import ParsedDocument, TextBlock
+from rag_platform.ingestion.schemas import ParsedDocument, TextBlock
 
 
 @dataclass(frozen=True, slots=True)

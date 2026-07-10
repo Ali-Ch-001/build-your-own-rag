@@ -1,0 +1,202 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: atlas-rag-alerts
+  namespace: observability
+  labels:
+    app: atlas-rag
+    component: application
+spec:
+  groups:
+    - name: rag-service-alerts
+      interval: 60s
+      rules:
+        - alert: RAGHighErrorRate
+          expr: |
+            (
+              sum(rate(atlas_http_requests_total{status=~"5.."}[5m]))
+              /
+              clamp_min(sum(rate(atlas_http_requests_total[5m])), 1)
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: api
+          annotations:
+            summary: "Atlas RAG high error rate (>1% 5xx over 5m)"
+            description: |
+              The 5xx error rate is {{ $value | humanizePercentage }} across all
+              routes over the past 5 minutes. Check the RAG Overview dashboard,
+              search logs for stack traces, and verify downstream dependencies
+              (PostgreSQL, Qdrant, Redis, Kafka).
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGRetrievalLatencyHigh
+          expr: |
+            histogram_quantile(0.95, sum(rate(atlas_http_request_duration_seconds_bucket{
+              route="/v1/search"
+            }[10m])) by (le)) > 0.5
+          for: 10m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: retrieval
+          annotations:
+            summary: "Atlas RAG retrieval P95 latency > 500ms for 10 minutes"
+            description: |
+              Retrieval P95 latency is {{ $value | humanizeDuration }}.
+              Identify the slow leg (sparse/dense/rerank/model), check downstream
+              dependencies, and review recent deployments. See runbook for
+              detailed troubleshooting and mitigation.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGIngestionStalled
+          expr: |
+            rate(atlas_documents_ingested_total[15m]) == 0
+          for: 15m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: ingestion
+          annotations:
+            summary: "Atlas RAG ingestion stalled (0 documents processed in 15m)"
+            description: |
+              No documents have been ingested in the past 15 minutes, but
+              ingestion requests may still be inbound. Check ingestion worker
+              status, Kafka consumer lag, DLQ, database connections, and
+              Qdrant write pressure.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/ingestion-stalled.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGQueueAgeHigh
+          expr: |
+            atlas_ingestion_queue_age_seconds{quantile="0.99"} > 600
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: ingestion
+          annotations:
+            summary: "Atlas RAG ingestion queue age > 10 minutes (P99)"
+            description: |
+              The oldest message in the ingestion queue has been waiting
+              longer than 10 minutes at P99. This indicates the ingestion
+              workers cannot keep up with the inbound document rate.
+              Consider scaling workers horizontally or investigating
+              slow per-document processing stages.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/ingestion-stalled.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGCacheHitRateLow
+          expr: |
+            (
+              sum(rate(atlas_cache_hits_total[30m]))
+              /
+              clamp_min(sum(rate(atlas_retrieval_requests_total[30m])), 1)
+            ) < 0.4
+          for: 30m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: cache
+          annotations:
+            summary: "Atlas RAG cache hit rate < 40% for 30 minutes"
+            description: |
+              Cache hit rate has dropped below 40% (currently {{ $value | humanizePercentage }}).
+              This may indicate corpus epoch churn, semantic cache eviction
+              pressure, or a query distribution shift. Check the Redis memory
+              usage, eviction policy, and corpus ingestion activity.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGDatabaseConnectionPoolExhausted
+          expr: |
+            (
+              atlas_database_pool_active_connections
+              /
+              clamp_min(atlas_database_pool_max_size, 1)
+            ) > 0.8
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: database
+          annotations:
+            summary: "Atlas RAG database connection pool > 80% exhausted"
+            description: |
+              The PostgreSQL connection pool for the RAG API is at
+              {{ $value | humanizePercentage }} of maximum capacity.
+              This may cause connection timeouts under load. Verify
+              pool configuration (pool_size, max_overflow), check for
+              connection leaks, and review slow queries.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-infrastructure"
+
+        - alert: RAGKafkaConsumerLagHigh
+          expr: |
+            sum by (consumergroup, topic) (kafka_consumergroup_lag{
+              consumergroup=~"rag-.*"
+            }) > 10000
+          for: 10m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: kafka
+          annotations:
+            summary: "Atlas RAG Kafka consumer lag > 10,000 for 10 minutes"
+            description: |
+              Consumer group {{ $labels.consumergroup }} on topic
+              {{ $labels.topic }} has a lag of {{ $value }}.
+              Ingestion workers may be falling behind. Check worker
+              throughput and consider horizontal scaling.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/ingestion-stalled.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-infrastructure"
+
+        - alert: RAGRedisMemoryHigh
+          expr: |
+            (
+              redis_memory_used_bytes
+              /
+              clamp_min(redis_memory_max_bytes, 1)
+            ) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: redis
+          annotations:
+            summary: "Atlas RAG Redis memory > 80%"
+            description: |
+              Redis instance memory usage is at {{ $value | humanizePercentage }}.
+              Check eviction policy, semantic cache size, and consider
+              scaling Redis or increasing maxmemory if hit rate is also
+              declining.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-infrastructure"
+
+        - alert: RAGQdrantDiskSpaceLow
+          expr: |
+            (
+              qdrant_collection_disk_free_bytes
+              /
+              (
+                qdrant_collection_disk_free_bytes + qdrant_collection_disk_usage_bytes
+              )
+            ) < 0.15
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: qdrant
+          annotations:
+            summary: "Atlas RAG Qdrant disk space < 15% free"
+            description: |
+              Qdrant vector store has only {{ $value | humanizePercentage }}
+              of disk space remaining. This is critical for write operations.
+              Increase storage allocation or run a vector compaction/vacuum
+              if supported by the Qdrant version.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/query-latency-spike.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-infrastructure"

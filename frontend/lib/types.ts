@@ -153,3 +153,33 @@ export interface ActivityItem {
   at: string;
   state: ServiceState;
 }
+
+export interface EvaluationGate {
+  name: string;
+  actual: string;
+  threshold: string;
+  margin: string;
+}
+
+export interface TrendPoint {
+  release: string;
+  recall: number;
+}
+
+export interface EvaluationSummary {
+  run_id: string;
+  dataset_name: string;
+  corpus_id: string;
+  case_count: number;
+  status: string;
+  recall_at_20: number;
+  faithfulness: number;
+  citation_precision: number;
+  answer_relevancy: number;
+  answer_correctness: number;
+  p95_latency_s: number;
+  created_at: string;
+  completed_at: string | null;
+  trends: TrendPoint[];
+  release_gates: EvaluationGate[];
+}

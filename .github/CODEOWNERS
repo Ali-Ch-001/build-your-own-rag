@@ -1,0 +1,26 @@
+# ── Platform / Infrastructure ────────────────────────────────────────────
+# Core platform code, build system, CI/CD, and shared library ownership.
+/src/rag_platform/         @atlas-rag/platform-team
+/database/                 @atlas-rag/platform-team
+/deploy/                   @atlas-rag/platform-team
+/infra/                    @atlas-rag/platform-team
+/observability/            @atlas-rag/platform-team
+/scripts/                  @atlas-rag/platform-team
+/Makefile                  @atlas-rag/platform-team
+/Dockerfile                @atlas-rag/platform-team
+/compose.yaml              @atlas-rag/platform-team
+/.github/                  @atlas-rag/platform-team
+/pyproject.toml            @atlas-rag/platform-team
+
+# ── Security ─────────────────────────────────────────────────────────────
+# Auth, guardrails, encryption, secret management, and vulnerability response.
+/src/rag_platform/security/ @atlas-rag/security-team
+/observability/             @atlas-rag/security-team
+/SECURITY.md                @atlas-rag/security-team
+
+# ── Data / ML ────────────────────────────────────────────────────────────
+# Ingestion pipeline, embeddings, vector store, reranker, graph store.
+/src/rag_platform/ingestion/   @atlas-rag/data-team
+/src/rag_platform/retrieval/   @atlas-rag/data-team
+/src/rag_platform/adapters/    @atlas-rag/data-team
+/src/rag_platform/agent/       @atlas-rag/data-team

@@ -82,7 +82,14 @@ class IngestionService:
                 self.settings.s3_clean_bucket,
                 clean_key,
             )
-            parsed = await anyio.to_thread.run_sync(parse_pdf, content, self.settings.max_pdf_pages)
+            parsed = await anyio.to_thread.run_sync(
+                parse_pdf,
+                content,
+                self.settings.max_pdf_pages,
+                self.settings.ocr_enabled,
+                self.settings.ocr_dpi,
+                self.settings.ocr_language,
+            )
             drafts = self.chunker.chunk(parsed)
             if not drafts:
                 raise ValueError("Semantic chunking produced no content")
