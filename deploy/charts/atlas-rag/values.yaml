@@ -26,10 +26,13 @@ config:
   API_PORT: "8000"
   S3_FORCE_PATH_STYLE: "false"
   KAFKA_CONSUMER_GROUP: rag-ingestion-v1
+  KAFKA_AWS_MSK_IAM: "false"
+  AWS_REGION: us-east-1
   QDRANT_URL: http://qdrant.qdrant.svc.cluster.local:6333
   QDRANT_COLLECTION_PREFIX: rag_chunks
   QDRANT_VECTOR_SIZE: "1536"
   QDRANT_REPLICATION_FACTOR: "2"
+  REDIS_IAM_ENABLED: "false"
   MODEL_PROVIDER: openai
   OPENAI_EMBEDDING_MODEL: text-embedding-3-small
   OPENAI_CHAT_MODEL: gpt-4.1-mini

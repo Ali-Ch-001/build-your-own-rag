@@ -38,10 +38,17 @@ export async function getDashboardData(): Promise<DashboardData> {
   const liveMetrics = metrics.status === "fulfilled" ? metrics.value as Record<string, unknown> : {};
   const normalizedMetrics = {
     ...demoMetrics,
+    corpusCount: typeof liveMetrics.corpus_count === "number" ? liveMetrics.corpus_count : 0,
     documentCount: typeof liveMetrics.documents === "number" ? liveMetrics.documents : demoMetrics.documentCount,
     chunkCount: typeof liveMetrics.chunks === "number" ? liveMetrics.chunks : demoMetrics.chunkCount,
+    indexSizeGb: typeof liveMetrics.index_size_gb === "number" ? liveMetrics.index_size_gb : 0,
+    queriesToday: typeof liveMetrics.queries_today === "number" ? liveMetrics.queries_today : 0,
+    ingestionPerHour: typeof liveMetrics.ingestion_per_hour === "number" ? liveMetrics.ingestion_per_hour : 0,
+    retrievalP50Ms: typeof liveMetrics.retrieval_p50_ms === "number" ? liveMetrics.retrieval_p50_ms : 0,
     retrievalP95Ms: typeof liveMetrics.retrieval_p95_ms === "number" ? liveMetrics.retrieval_p95_ms : demoMetrics.retrievalP95Ms,
     cacheHitRate: typeof liveMetrics.cache_hit_rate === "number" ? liveMetrics.cache_hit_rate : demoMetrics.cacheHitRate,
+    throughput: Array.isArray(liveMetrics.throughput) ? liveMetrics.throughput as typeof demoMetrics.throughput : [],
+    latency: Array.isArray(liveMetrics.latency) ? liveMetrics.latency as typeof demoMetrics.latency : [],
   };
   return {
     live: stateFromHealth(live),

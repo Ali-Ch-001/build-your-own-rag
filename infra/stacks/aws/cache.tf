@@ -33,7 +33,7 @@ resource "aws_elasticache_user" "default" {
 }
 
 resource "aws_elasticache_user" "application" {
-  user_id       = substr("${local.name}-application", 0, 40)
+  user_id       = "atlas-application"
   user_name     = "atlas-application"
   access_string = "on ~rag:* ~rag_* +@read +@write +ping -@dangerous"
   engine        = "REDIS"
