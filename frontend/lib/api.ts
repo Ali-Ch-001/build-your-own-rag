@@ -1,6 +1,17 @@
 import { demoDocuments, demoMetrics } from "@/lib/demo-data";
 import { parseResponseEnvelope, SseParser } from "@/lib/sse";
-import type { DashboardData, DocumentsResult, HealthResponse, RagDocument, ResponseEvent, StreamRequest } from "@/lib/types";
+import type {
+  DashboardData,
+  DependencyStatus,
+  DocumentsResult,
+  HealthResponse,
+  IngestionSummary,
+  OperationsData,
+  RagDocument,
+  ResponseEvent,
+  SloBudget,
+  StreamRequest,
+} from "@/lib/types";
 import { authorizationHeaders } from "@/lib/auth-token";
 
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -147,6 +158,60 @@ export async function cancelResponse(responseId: string): Promise<void> {
 }
 
 export const defaultCorpusId = process.env.NEXT_PUBLIC_DEFAULT_CORPUS_ID ?? "";
+
+export async function getOperationsData(): Promise<OperationsData> {
+  try {
+    const [ingestionRaw, healthRaw, metricsRaw] = await Promise.allSettled([
+      apiFetch<IngestionSummary>("/v1/ingestion/summary"),
+      apiFetch<HealthResponse>("/health/ready"),
+      apiFetch<Record<string, unknown>>("/metrics/summary"),
+    ]);
+
+    const ingestion: IngestionSummary | null =
+      ingestionRaw.status === "fulfilled" ? ingestionRaw.value : null;
+
+    const health = healthRaw.status === "fulfilled" ? healthRaw.value : null;
+    const checks = health?.checks ?? {};
+    const dependencies: DependencyStatus[] = [
+      { name: "PostgreSQL", role: "Metadata and tenant state", latency: typeof checks.postgres === "boolean" ? (checks.postgres ? "healthy" : "down") : "unknown", state: checks.postgres ? "operational" : "down" },
+      { name: "Redis", role: "Caching and semantic search", latency: typeof checks.redis === "boolean" ? (checks.redis ? "healthy" : "down") : "unknown", state: checks.redis ? "operational" : "down" },
+      { name: "Qdrant", role: "Dense vector retrieval", latency: typeof checks.qdrant === "boolean" ? (checks.qdrant ? "healthy" : "down") : "unknown", state: checks.qdrant ? "operational" : "unknown" },
+      { name: "MinIO/S3", role: "Document and artifact storage", latency: typeof checks.minio === "boolean" ? (checks.minio ? "healthy" : "down") : "unknown", state: checks.minio ? "operational" : "unknown" },
+      { name: "Kafka", role: "Event transport", latency: typeof checks.kafka === "boolean" ? (checks.kafka ? "healthy" : "down") : "unknown", state: checks.kafka ? "operational" : "unknown" },
+    ];
+
+    const metrics = metricsRaw.status === "fulfilled" ? metricsRaw.value : {};
+    const p95 = typeof metrics.retrieval_p95_ms === "number" ? metrics.retrieval_p95_ms : 0;
+    const p50 = typeof metrics.retrieval_p50_ms === "number" ? metrics.retrieval_p50_ms : 0;
+    const cache = typeof metrics.cache_hit_rate === "number" ? metrics.cache_hit_rate : 0;
+
+    const sloBudgets: SloBudget[] = [
+      { label: "Response latency P95", current: `${p95.toFixed(0)} ms`, target: "350 ms", used: p95 > 0 ? Math.min(Math.round((p95 / 350) * 100), 100) : 0 },
+      { label: "Cache hit rate", current: `${(cache * 100).toFixed(1)}%`, target: "60%", used: cache > 0 ? Math.min(Math.round(((1 - cache) / 0.4) * 100), 100) : 0 },
+      { label: "P50 retrieval", current: `${p50.toFixed(0)} ms`, target: "200 ms", used: p50 > 0 ? Math.min(Math.round((p50 / 200) * 100), 100) : 0 },
+    ];
+
+    return { ingestion, dependencies, sloBudgets, demo: false, fetchedAt: new Date().toISOString() };
+  } catch {
+    return {
+      ingestion: null,
+      dependencies: [
+        { name: "PostgreSQL", role: "Metadata and tenant state", latency: "unknown", state: "unknown" },
+        { name: "Redis", role: "Caching and semantic search", latency: "unknown", state: "unknown" },
+        { name: "Qdrant", role: "Dense vector retrieval", latency: "unknown", state: "unknown" },
+        { name: "MinIO/S3", role: "Document and artifact storage", latency: "unknown", state: "unknown" },
+        { name: "Kafka", role: "Event transport", latency: "unknown", state: "unknown" },
+      ],
+      sloBudgets: [
+        { label: "Response latency P95", current: "N/A", target: "350 ms", used: 0 },
+        { label: "Cache hit rate", current: "N/A", target: "60%", used: 0 },
+        { label: "P50 retrieval", current: "N/A", target: "200 ms", used: 0 },
+      ],
+      demo: true,
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+}
 
 function normalizeDocument(value: unknown): RagDocument {
   const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
