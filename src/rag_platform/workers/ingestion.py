@@ -5,6 +5,7 @@ import signal
 
 import structlog
 
+from rag_platform.adapters.backpressure import BackpressureController
 from rag_platform.adapters.cache import CacheStore
 from rag_platform.adapters.embeddings import create_embedding_provider
 from rag_platform.adapters.events import EventConsumer, EventProducer
@@ -32,6 +33,7 @@ async def main() -> None:
     cache = CacheStore(settings)
     await object_store.ensure_buckets()
     await vector_store.ensure_collection()
+    backpressure = BackpressureController(settings)
     service = IngestionService(
         settings,
         object_store,
@@ -39,6 +41,7 @@ async def main() -> None:
         vector_store,
         cache,
         GraphStore(settings) if settings.neo4j_enabled else None,
+        backpressure,
     )
     retry_producer = EventProducer(settings)
     await retry_producer.start()
@@ -48,6 +51,7 @@ async def main() -> None:
         async for payload in consumer.events():
             if stop.is_set():
                 break
+            await backpressure.wait_if_backpressured()
             event = IngestionEvent.model_validate(payload)
             try:
                 await service.process(event)

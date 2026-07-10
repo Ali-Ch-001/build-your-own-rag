@@ -10,6 +10,7 @@ import orjson
 import structlog
 from sqlalchemy import delete, select
 
+from rag_platform.adapters.backpressure import BackpressureController
 from rag_platform.adapters.cache import CacheStore
 from rag_platform.adapters.embeddings import EmbeddingProvider
 from rag_platform.adapters.graph_store import GraphStore
@@ -45,6 +46,7 @@ class IngestionService:
         vector_store: VectorStore,
         cache: CacheStore,
         graph: GraphStore | None = None,
+        backpressure: BackpressureController | None = None,
     ) -> None:
         self.settings = settings
         self.object_store = object_store
@@ -52,6 +54,7 @@ class IngestionService:
         self.vector_store = vector_store
         self.cache = cache
         self.graph = graph
+        self.backpressure = backpressure
         self.scanner = DocumentScanner(settings)
         self.chunker = SemanticChunker(
             ChunkerConfig(
@@ -107,7 +110,16 @@ class IngestionService:
             ]
             vectors: list[list[float]] = []
             for start in range(0, len(inputs), 128):
-                vectors.extend(await self.embeddings.embed_documents(inputs[start : start + 128]))
+                if self.backpressure:
+                    await self.backpressure.acquire_embedding_slot()
+                try:
+                    batch = await self.embeddings.embed_documents(inputs[start : start + 128])
+                    vectors.extend(batch)
+                finally:
+                    if self.backpressure:
+                        self.backpressure.release_embedding_slot()
+            if self.backpressure:
+                await self.backpressure.acquire_qdrant_write()
             await self.vector_store.upsert_chunks(chunks, vectors)
             if self.graph:
                 await self.graph.index_chunks(chunks)

@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     clamav_host: str = "localhost"
     clamav_port: int = 3310
 
+    embedding_max_concurrency: int = 8
+    qdrant_write_rate_per_second: float = 20.0
+    qdrant_write_burst: int = 50
+    ingestion_backpressure_p95_threshold_ms: float = 500.0
+
     sparse_candidates: int = 50
     dense_candidates: int = 50
     fusion_candidates: int = 20
