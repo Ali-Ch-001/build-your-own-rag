@@ -18,6 +18,7 @@ from rag_platform.api.dependencies import (
     get_vector_store,
 )
 from rag_platform.api.documents import router as documents_router
+from rag_platform.api.evaluation import router as evaluation_router
 from rag_platform.api.health import router as health_router
 from rag_platform.api.ingestion import router as ingestion_router
 from rag_platform.api.responses import router as responses_router
@@ -81,6 +82,7 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(documents_router)
+app.include_router(evaluation_router)
 app.include_router(ingestion_router)
 app.include_router(search_router)
 app.include_router(responses_router)

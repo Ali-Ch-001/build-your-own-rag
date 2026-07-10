@@ -233,3 +233,42 @@ class RetrievalRequestLog(Base):
     )
 
     __table_args__ = (Index("ix_retrieval_requests_tenant_created", "tenant_id", "created_at"),)
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+
+    run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    dataset_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    corpus_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    case_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="running")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_evaluation_runs_tenant_created", "tenant_id", "created_at"),)
+
+
+class EvaluationMetric(Base):
+    __tablename__ = "evaluation_metrics"
+
+    metric_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    question_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id"],
+            ["evaluation_runs.run_id"],
+            ondelete="CASCADE",
+        ),
+        Index("ix_evaluation_metrics_tenant_run", "tenant_id", "run_id"),
+    )

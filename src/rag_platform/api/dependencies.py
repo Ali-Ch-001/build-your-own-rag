@@ -9,6 +9,7 @@ from rag_platform.adapters.vector_store import VectorStore
 from rag_platform.adapters.web_search import TavilySearch
 from rag_platform.agent.router import SemanticRouter
 from rag_platform.config import get_settings
+from rag_platform.evaluation.service import EvaluationService
 from rag_platform.retrieval.reranker import Reranker, create_reranker
 from rag_platform.services.agent import AgentService
 from rag_platform.services.documents import DocumentService
@@ -78,4 +79,13 @@ def get_agent_service() -> AgentService:
         get_generation_provider(),
         get_cache_store(),
         get_graph_store(),
+    )
+
+
+@lru_cache
+def get_evaluation_service() -> EvaluationService:
+    return EvaluationService(
+        get_settings(),
+        get_retrieval_service(),
+        get_generation_provider(),
     )
