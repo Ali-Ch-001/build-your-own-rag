@@ -26,20 +26,40 @@ async def live() -> dict[str, str]:
 async def ready(
     session: AsyncSession = Depends(get_session),
     cache: CacheStore = Depends(get_cache_store),
+    vectors: VectorStore = Depends(get_vector_store),
+    object_store: ObjectStore = Depends(get_object_store),
 ) -> dict[str, object]:
-    checks: dict[str, bool] = {}
+    checks: dict[str, object] = {}
     try:
         await session.execute(text("SELECT 1"))
-        checks["postgres"] = True
+        checks["postgres"] = "healthy"
     except Exception:
-        checks["postgres"] = False
+        checks["postgres"] = "unreachable"
     try:
-        checks["redis"] = await cache.ping()
+        checks["redis"] = "healthy" if await cache.ping() else "unreachable"
     except Exception:
-        checks["redis"] = False
-    if not all(checks.values()):
-        raise HTTPException(status_code=503, detail={"status": "not_ready", "checks": checks})
-    return {"status": "ready", "checks": checks}
+        checks["redis"] = "unreachable"
+    try:
+        await vectors.client.get_collections()
+        checks["qdrant"] = "healthy"
+    except Exception:
+        checks["qdrant"] = "unreachable"
+    try:
+        await object_store.get_object("not-a-real-key-check", "health-check")
+        checks["minio"] = "healthy"
+    except Exception as exc:
+        error = str(exc)
+        if any(code in error.lower() for code in ("nosuchkey", "not found", "404", "no such")):
+            checks["minio"] = "healthy"
+        else:
+            checks["minio"] = "unreachable"
+    healthy = [v for v in checks.values() if v == "healthy"]
+    if len(healthy) < 3:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "checks": checks, "healthy_count": len(healthy)},
+        )
+    return {"status": "ready", "checks": checks, "healthy_count": len(healthy)}
 
 
 @router.get("/metrics/summary")
