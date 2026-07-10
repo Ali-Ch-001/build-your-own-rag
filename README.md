@@ -207,17 +207,19 @@ Detailed account setup and secret locations are documented in [`docs/SETUP.md`](
 
 ## Deployment Options
 
-### Docker Compose
+### Docker Compose (local, one command)
 
-Best for local development, demonstrations, and architecture evaluation. It is one command, but it is not an HA production topology.
+Best for local development, demonstrations, and architecture evaluation. Starts every service in containers.
 
 ```bash
 make quickstart
 ```
 
+Opens the frontend at `http://localhost:3000`. No API keys required — local mode uses deterministic embeddings and extractive answers. Paid providers activate when you add keys to `.env`.
+
 ### Existing Kubernetes cluster
 
-The Helm chart is provider-neutral. Supply PostgreSQL, Kafka, Redis, S3-compatible storage, and Qdrant endpoints, then deploy:
+The Helm chart is provider-neutral. Point it at your PostgreSQL, Kafka, Redis, S3-compatible storage, and Qdrant endpoints:
 
 ```bash
 helm upgrade --install atlas-rag deploy/charts/atlas-rag \
@@ -226,32 +228,64 @@ helm upgrade --install atlas-rag deploy/charts/atlas-rag \
   -f deploy/charts/atlas-rag/values-production.example.yaml
 ```
 
-Required controllers and production values are listed in [`deploy/charts/atlas-rag/README.md`](deploy/charts/atlas-rag/README.md).
+The chart deploys the API, frontend, ingestion worker, deletion worker, migration job, HPA, KEDA ScaledObjects, PDBs, topology spread, network policies, resource quotas, External Secrets, ServiceMonitor, and optional ingress. See [`deploy/charts/atlas-rag/README.md`](deploy/charts/atlas-rag/README.md) for controller prerequisites and AWS IAM configuration.
 
-### AWS
+**What you bring:** PostgreSQL, Kafka, Redis, S3-compatible object store, Qdrant endpoint.
 
-The AWS stack provisions one regional data plane. It is designed for AWS SSO and reviewed plan/apply workflows, not long-lived access keys.
+### AWS (full production data plane)
+
+The AWS stack provisions a production-ready regional data plane in ~30 minutes. It is designed for AWS IAM Identity Center (SSO) and reviewed plan/apply workflows — no long-lived access keys.
+
+**Step-by-step:**
 
 ```bash
+# 1. Authenticate
 aws sso login --profile atlas-platform
 export AWS_PROFILE=atlas-platform
 
-terraform -chdir=infra/stacks/aws init -backend-config=backend.hcl
-terraform -chdir=infra/stacks/aws plan -var-file=dev.tfvars -out=tfplan
-terraform -chdir=infra/stacks/aws apply tfplan
+# 2-9. One-command deployment (interactive, confirms each step)
+./scripts/deploy-aws.sh all
+
+# Or step-by-step:
+./scripts/deploy-aws.sh bootstrap -e prod -r us-east-1
+./scripts/deploy-aws.sh plan -e prod
+./scripts/deploy-aws.sh apply -e prod
+./scripts/deploy-aws.sh platform
+./scripts/deploy-aws.sh secrets
+./scripts/deploy-aws.sh kubeconfig
+./scripts/deploy-aws.sh deploy-app
 ```
 
-Follow [`infra/stacks/aws/README.md`](infra/stacks/aws/README.md) for remote-state bootstrap, costs, secret population, EKS access, Qdrant, and GitOps release steps.
+**What Terraform provisions:** 3-AZ VPC with public/private/database subnets, EKS with 5 node groups (system, online CPU, batch spot, sandbox, optional GPU), encrypted S3 buckets (quarantine, clean, derived), Multi-AZ RDS PostgreSQL 16, TLS-encrypted Redis replication group with IAM auth, MSK Serverless with IAM auth, ECR repositories, KMS key, Secrets Manager placeholders, IRSA workload identity, and GitHub OIDC release role.
+
+**What you still configure outside Terraform:** Auth0 tenant, DNS/certificates (ACM), Qdrant endpoint (Cloud or self-managed), OpenAI and Tavily accounts, GitHub environments and protected branches.
+
+Full details: [`infra/stacks/aws/README.md`](infra/stacks/aws/README.md), [`infra/bootstrap/aws/README.md`](infra/bootstrap/aws/README.md), [`docs/SETUP.md`](docs/SETUP.md).
+
+### Bells and Whistles
+
+These assets are included and ready to activate:
+
+| Layer | What's included | How to activate |
+|---|---|---|
+| **Retrieval quality** | RAGAS evaluation pipeline, golden dataset, automated scoring, release gates | `POST /v1/evaluation/run` after indexing documents |
+| **Observability** | 3 Grafana dashboards (RAG overview, infrastructure, SLO budget), 14 Prometheus alert rules, 3 operational runbooks | Import `observability/dashboards/*.json` and `observability/alerts/*.yml` into your Grafana/Prometheus stack |
+| **Scale testing** | Configurable PDF generator, Locust load test (search, upload, agent SSE, health checks) | `python scripts/benchmark/generate-test-pdfs.py --count 1000` then `locust -f scripts/benchmark/locustfile.py` |
+| **GraphRAG** | Neo4j entity/relationship projection, bounded multi-hop traversal, Cypher template safety | Set `NEO4J_ENABLED=true` and point at a Neo4j instance |
+| **OCR** | PyMuPDF Tesseract fallback with page quality gates, 14 tests, configurable DPI/language | Set `OCR_ENABLED=true` in `.env` |
+| **Security** | Auth0 JWT validation, RBAC, PostgreSQL RLS, prompt injection guard, SSRF-protected web fetcher, OWASP LLM pen-test checklist | Configure Auth0 in `frontend/.env.local`, review `docs/SECURITY_CONTROLS.md` |
+| **Compliance** | SOC2 TCS mapping, NIST 800-53 controls, data retention policy, deletion certification template | Review `docs/SECURITY_CONTROLS.md`, `docs/RETENTION_POLICY.md` |
+| **CI/CD** | GitHub Actions for lint/test/build/scan/SBOM/sign, Terraform/Helm validate, digest-based GitOps promotion | Push to `main` or open a PR |
 
 ### Is it one-click deployable everywhere?
 
-**Local: yes, with `make quickstart`.**
+**Local: yes, `make quickstart`.**
 
-**Kubernetes: one Helm command after its managed dependencies and controllers exist.**
+**Kubernetes: one Helm command after your managed services and controllers are online.**
 
-**AWS: one reviewed infrastructure workflow after the AWS account, remote state, DNS/certificates, Qdrant, Auth0, provider secrets, and GitHub OIDC are configured.** The repository deliberately does not hide an expensive production plan behind an unaudited “Deploy” button.
+**AWS: a guided 9-step workflow documented above, not a hidden-cost "Deploy" button.** The Terraform stack creates ~40 AWS resources. Review the plan before applying. The architecture document estimates monthly costs and suggests reservation/spot purchasing.
 
-GCP and Azure can run the portable containers and Helm chart, but this repository currently ships first-class Terraform for AWS. Provider-specific GCP and Azure modules are roadmap work, not something claimed as complete today.
+GCP and Azure can run the portable containers and Helm chart. Provider-specific Terraform modules for GCP and Azure are documented as roadmap work.
 
 ## API Example
 
@@ -293,9 +327,11 @@ deploy/charts/          Portable Kubernetes Helm chart
 deploy/environments/    Staging and production GitOps values
 infra/bootstrap/aws/    Encrypted Terraform remote-state bootstrap
 infra/stacks/aws/       Regional AWS production foundation
-observability/          OpenTelemetry and Prometheus local configuration
+observability/          OpenTelemetry, Prometheus, 3 Grafana dashboards, 14 alert rules
+scripts/                Quickstart (./scripts/quickstart.sh) and AWS deploy (./scripts/deploy-aws.sh)
 tests/                  Unit, contract, and integration tests
-.github/workflows/      CI, security, and digest-based release automation
+docs/                   Setup guide, security controls, retention policy, pen-test checklist
+.github/workflows/      CI, security scanning, SBOMs, and digest-based GitOps promotion
 ```
 
 ## Quality and Verification
