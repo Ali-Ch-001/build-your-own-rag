@@ -96,6 +96,55 @@ export interface StreamRequest {
   disconnect_behavior: "cancel";
 }
 
+export interface IngestionSummary {
+  source: string;
+  active_documents: number;
+  document_states: Record<string, number>;
+  queue_depth: Record<string, number>;
+  retry_queue: Record<string, number>;
+  today_processed: number;
+  failed_24h: number;
+  recent_failures: IngestionFailure[];
+  pipeline_stages: PipelineStage[];
+  generated_at: string;
+}
+
+export interface IngestionFailure {
+  job_id: string;
+  stage: string;
+  reason: string;
+  at: string | null;
+}
+
+export interface PipelineStage {
+  name: string;
+  count: number;
+  completed: number;
+  failed: number;
+}
+
+export interface DependencyStatus {
+  name: string;
+  role: string;
+  latency: string;
+  state: ServiceState;
+}
+
+export interface SloBudget {
+  label: string;
+  current: string;
+  target: string;
+  used: number;
+}
+
+export interface OperationsData {
+  ingestion: IngestionSummary | null;
+  dependencies: DependencyStatus[];
+  sloBudgets: SloBudget[];
+  demo: boolean;
+  fetchedAt: string;
+}
+
 export interface ActivityItem {
   id: string;
   kind: "ingestion" | "query" | "evaluation" | "alert";
