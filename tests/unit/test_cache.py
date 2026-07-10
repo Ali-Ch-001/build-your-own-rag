@@ -27,12 +27,8 @@ class TestVectorBytes:
 class TestElastiCacheIamCredentialProvider:
     def test_caches_credentials_within_expiry_window(self) -> None:
         with (
-            patch(
-                "rag_platform.adapters.cache.botocore.session"
-            ) as mock_session_module,
-            patch(
-                "rag_platform.adapters.cache.RequestSigner"
-            ) as mock_signer_cls,
+            patch("rag_platform.adapters.cache.botocore.session") as mock_session_module,
+            patch("rag_platform.adapters.cache.RequestSigner") as mock_signer_cls,
         ):
             mock_creds = MagicMock()
             mock_creds.access_key = "AKIATEST"
@@ -45,8 +41,7 @@ class TestElastiCacheIamCredentialProvider:
 
             mock_signer = MagicMock()
             mock_signer.generate_presigned_url.return_value = (
-                "http://test-cache/?Action=connect&User=test-user&"
-                "X-Amz-Signature=abc123"
+                "http://test-cache/?Action=connect&User=test-user&X-Amz-Signature=abc123"
             )
             mock_signer_cls.return_value = mock_signer
 
