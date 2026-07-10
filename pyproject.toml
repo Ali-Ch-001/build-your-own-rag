@@ -14,6 +14,7 @@ dependencies = [
   "alembic>=1.16,<2",
   "asyncpg>=0.30,<1",
   "aws-msk-iam-sasl-signer-python>=1.0.2,<2",
+  "datasets>=3,<4",
   "fastapi>=0.116,<1",
   "greenlet>=3.2,<4",
   "httpx>=0.28,<1",
@@ -33,6 +34,7 @@ dependencies = [
   "pymupdf>=1.26,<2",
   "python-multipart>=0.0.20,<1",
   "qdrant-client>=1.15,<2",
+  "ragas>=0.2,<1",
   "redis[hiredis]>=6.4,<7",
   "sqlalchemy[asyncio]>=2.0.43,<3",
   "structlog>=25.4,<26",
@@ -87,6 +89,7 @@ ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
+"scripts/benchmark/**/*.py" = ["S311"]
 
 [tool.mypy]
 python_version = "3.12"

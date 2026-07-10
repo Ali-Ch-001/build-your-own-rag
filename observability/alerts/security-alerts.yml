@@ -1,0 +1,130 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: atlas-rag-security-alerts
+  namespace: observability
+  labels:
+    app: atlas-rag
+    component: security
+spec:
+  groups:
+    - name: rag-security-alerts
+      interval: 60s
+      rules:
+        - alert: RAGCrossTenantAccessAttempt
+          expr: |
+            rate(atlas_http_requests_total{
+              status="403",
+              route=~"/v1/.*",
+              tenant_mismatch="true"
+            }[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: auth
+            classification: cross-tenant
+          annotations:
+            summary: "Cross-tenant access attempts detected"
+            description: |
+              Rate of 403 responses with tenant mismatch is
+              {{ $value | humanize }} req/s over the last 5 minutes.
+              This may indicate a misconfigured SDK, a JWT forging
+              attempt, or a client bug. Investigate the source IPs
+              and affected tenant IDs immediately.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/cross-tenant-incident.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGInjectionAttemptDetected
+          expr: |
+            rate(atlas_guardrail_violations_total{
+              violation_type="prompt_injection"
+            }[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: security
+            classification: injection
+          annotations:
+            summary: "Prompt injection attempts detected"
+            description: |
+              Prompt injection guardrail violations are occurring at
+              {{ $value | humanize }} violations/s. Review the request
+              logs for patterns. If the rate spikes, consider enabling
+              stricter input rejection or rate-limiting the offending
+              tenant.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/cross-tenant-incident.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGExcessiveTokenUsage
+          expr: |
+            sum by (tenant_id) (
+              rate(atlas_llm_input_tokens_total[1h]) +
+              rate(atlas_llm_output_tokens_total[1h])
+            ) > atlas_tenant_token_budget_hourly
+          for: 10m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: llm
+            classification: quota
+          annotations:
+            summary: "Tenant token budget exceeded: {{ $labels.tenant_id }}"
+            description: |
+              Tenant {{ $labels.tenant_id }} has exceeded its hourly token
+              budget. Current usage rate: {{ $value | humanize }} tokens/hr
+              vs budget {{ $labels.atlas_tenant_token_budget_hourly }}.
+              Review whether this is a legitimate usage spike (e.g., bulk
+              summarization) or potential abuse. Consider auto-throttling
+              or alerting the tenant.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/cross-tenant-incident.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGToolCallRateAnomaly
+          expr: |
+            abs(
+              rate(atlas_tool_calls_total[5m])
+              -
+              rate(atlas_tool_calls_total[1h] offset 1h)
+            ) > 2 * stddev_over_time(
+              rate(atlas_tool_calls_total[5m])[1h:5m]
+            )
+          for: 10m
+          labels:
+            severity: warning
+            service: atlas-rag
+            component: agent
+            classification: anomaly
+          annotations:
+            summary: "Unusual tool call rate detected"
+            description: |
+              The rate of agent tool calls (web search, graph search,
+              calculator) has deviated significantly from the baseline.
+              Current rate: {{ $value | humanize }} calls/s. This could
+              indicate a bug in the agent router, a new workload pattern,
+              or an attempted abuse of expensive tool operations.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/cross-tenant-incident.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"
+
+        - alert: RAGUnauthorizedEndpointAccess
+          expr: |
+            rate(atlas_http_requests_total{
+              status="403",
+              route=~"/admin/.*|/metrics|/v1/admin/.*"
+            }[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            service: atlas-rag
+            component: security
+            classification: unauthorized
+          annotations:
+            summary: "Repeated unauthorized access to admin endpoints"
+            description: |
+              Rate of 403 responses on admin/mgmt endpoints is
+              {{ $value | humanize }} req/s over 5 minutes.
+              Investigate the source IPs and JWT claims. This may
+              indicate a targeted reconnaissance attempt.
+            runbook_url: "https://github.com/your-org/atlas-rag/blob/main/operations/runbooks/cross-tenant-incident.md"
+            dashboard_url: "https://grafana.example.com/d/atlas-rag-overview"

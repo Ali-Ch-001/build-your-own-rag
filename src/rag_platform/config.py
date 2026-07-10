@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     chunk_max_tokens: int = 600
     chunk_overlap_tokens: int = 60
     ocr_enabled: bool = False
+    ocr_dpi: int = 300
+    ocr_language: str = "eng"
     clamav_enabled: bool = False
     clamav_host: str = "localhost"
     clamav_port: int = 3310
