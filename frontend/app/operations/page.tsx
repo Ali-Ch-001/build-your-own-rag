@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Metadata } from "next";
-import { AlertTriangle, Boxes, Clock3, DatabaseZap, Gauge, HardDrive, Network, RefreshCw, Server, TimerReset } from "lucide-react";
+import { Boxes, Clock3, DatabaseZap, Gauge, HardDrive, Network, RefreshCw, Server, TimerReset } from "lucide-react";
 import type { OperationsData } from "@/lib/types";
 import { getOperationsData } from "@/lib/api";
 import { EmptyState, MetricCard, PageHeader, SectionPanel, StatusBadge } from "@/components/ui";
@@ -11,18 +10,17 @@ export default function OperationsPage() {
   const [data, setData] = useState<OperationsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  async function refresh() {
     setLoading(true);
-    try {
-      setData(await getOperationsData());
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
+    try { setData(await getOperationsData()); }
+    catch { setData(null); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
+    void refresh();
+  }, []);
 
   const p95 = data?.sloBudgets?.[0]?.current ?? "N/A";
   const cacheRate = data?.sloBudgets?.[1]?.current ?? "N/A";
@@ -35,7 +33,7 @@ export default function OperationsPage() {
         eyebrow="Reliability / Operations"
         title="Infrastructure & SLOs"
         description="Inspect service objectives, queue pressure, dependency health, and active operational alerts."
-        actions={<button className="btn-secondary" onClick={() => void load()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh</button>}
+        actions={<button className="btn-secondary" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh</button>}
       />
       <div className="mx-auto max-w-[1500px] space-y-6 p-4 sm:p-6 lg:p-8">
         {data?.demo && (
@@ -45,9 +43,9 @@ export default function OperationsPage() {
         )}
 
         <section className="grid grid-cols-1 gap-px border border-line bg-line sm:grid-cols-2 xl:grid-cols-4" aria-label="SLO metrics">
-          <MetricCard label="Response P95" value={p95} detail={p95 === "N/A" ? "No live data" : "Live retrieval telemetry"} icon={Gauge} status={p95 !== "N/A" ? "positive" : "unknown"} />
-          <MetricCard label="Cache hit rate" value={cacheRate} detail={cacheRate === "N/A" ? "No live data" : "Rolling 24-hour window"} icon={DatabaseZap} status={cacheRate !== "N/A" ? "positive" : "unknown"} />
-          <MetricCard label="Retrieval P50" value={p50} detail={p50 === "N/A" ? "No live data" : "Live retrieval telemetry"} icon={Server} status={p50 !== "N/A" ? "positive" : "unknown"} />
+          <MetricCard label="Response P95" value={p95} detail={p95 === "N/A" ? "No live data" : "Live retrieval telemetry"} icon={Gauge} status={p95 !== "N/A" ? "positive" : "neutral"} />
+          <MetricCard label="Cache hit rate" value={cacheRate} detail={cacheRate === "N/A" ? "No live data" : "Rolling 24-hour window"} icon={DatabaseZap} status={cacheRate !== "N/A" ? "positive" : "neutral"} />
+          <MetricCard label="Retrieval P50" value={p50} detail={p50 === "N/A" ? "No live data" : "Live retrieval telemetry"} icon={Server} status={p50 !== "N/A" ? "positive" : "neutral"} />
           <MetricCard label="SLO headroom" value={`${Math.max(0, 100 - totalSloUsed)}%`} detail="Combined budget remaining" icon={Clock3} status={totalSloUsed < 70 ? "positive" : "warning"} />
         </section>
 
