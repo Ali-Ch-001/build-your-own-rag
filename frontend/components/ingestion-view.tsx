@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, Clock3, FileSearch, Layers3, RefreshCw, ScanText, Split, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, FileSearch, Layers3, RefreshCw, ScanText, Split, UploadCloud } from "lucide-react";
 import type { IngestionSummary } from "@/lib/types";
 import { getOperationsData } from "@/lib/api";
 import { EmptyState, MetricCard, PageHeader, SectionPanel, StatusBadge } from "@/components/ui";
@@ -14,9 +14,8 @@ function formatRate(total: number): string {
 export function IngestionView() {
   const [data, setData] = useState<IngestionSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState("");
 
-  async function load() {
+  async function refresh() {
     setLoading(true);
     try {
       const result = await getOperationsData();
@@ -29,14 +28,8 @@ export function IngestionView() {
   }
 
   useEffect(() => {
-    const initialLoad = async () => {
-      setLoading(true);
-      try { setData((await getOperationsData()).ingestion); }
-      catch { setData(null); }
-      finally { setLoading(false); }
-    };
     // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
-    void initialLoad();
+    void refresh();
   }, []);
 
   const totalQueue = data
@@ -53,11 +46,9 @@ export function IngestionView() {
         eyebrow="Pipeline / Ingestion"
         title="Document processing"
         description="Trace document flow from receipt through durable vector indexing and recover failed work."
-        actions={<button className="btn-secondary" onClick={() => void load()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh</button>}
+        actions={<button className="btn-secondary" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh</button>}
       />
       <div className="mx-auto max-w-[1500px] space-y-6 p-4 sm:p-6 lg:p-8">
-        {notice && <div role="status" className="flex items-center gap-2 border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-[#9af0ba]"><Check size={16} aria-hidden="true" />{notice}</div>}
-
         {!data && !loading && (
           <div className="panel-raised p-6">
             <EmptyState icon={Layers3} title="Ingestion telemetry unavailable" description="The pipeline summary endpoint is not connected. Start the ingestion worker and refresh." />
