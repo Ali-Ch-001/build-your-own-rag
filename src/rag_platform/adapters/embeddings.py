@@ -23,9 +23,27 @@ class EmbeddingProvider(ABC):
 
 
 class DeterministicEmbeddingProvider(EmbeddingProvider):
-    """Stable local embeddings for integration tests, not semantic production search."""
+    """Stable local embeddings for integration tests, NOT semantic production search.
+
+    These vectors are SHA-256-derived and L2-normalized. They produce
+    consistent results across runs but have ZERO semantic meaning. Any
+    retrieval quality measured with these embeddings is meaningless.
+
+    Set MODEL_PROVIDER=openai and provide OPENAI_API_KEY for production use.
+    """
 
     def __init__(self, dimension: int) -> None:
+        import structlog
+
+        logger = structlog.get_logger(__name__)
+        logger.warning(
+            "deterministic_embeddings_active",
+            message=(
+                "Deterministic hash-based embeddings are in use. These are for "
+                "integration testing only and produce no semantic meaning. Set "
+                "MODEL_PROVIDER=openai for production retrieval."
+            ),
+        )
         self.dimension = dimension
         self.model_name = f"deterministic-sha256-{dimension}"
 

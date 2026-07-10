@@ -1,8 +1,8 @@
 # Security Policy
 
-Do not report vulnerabilities through a public issue.
+## Reporting a Vulnerability
 
-Before publishing this repository, configure a private security-reporting address or enable GitHub private vulnerability reporting and replace this paragraph with the project's supported contact process.
+Report vulnerabilities via [GitHub Private Vulnerability Reporting](https://github.com/Ali-Ch-001/atlas-rag/security/advisories/new) or directly to the repository owner at the email listed on the GitHub profile.
 
 Include the affected version, deployment mode, reproduction steps, impact, and any suggested mitigation. Do not include live credentials, customer data, or exploit traffic against systems you do not own.
 
