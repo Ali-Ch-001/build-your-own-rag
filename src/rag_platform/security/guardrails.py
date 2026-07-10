@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from rag_platform.telemetry import GUARDRAIL_VIOLATIONS
+
 
 class GuardrailViolation(ValueError):
     pass
@@ -39,6 +41,7 @@ def inspect_input(text: str, *, reject_injection: bool = False) -> GuardrailResu
     normalized = " ".join(text.replace("\x00", "").split())
     labels: list[str] = []
     if any(pattern.search(normalized) for pattern in _INJECTION_PATTERNS):
+        GUARDRAIL_VIOLATIONS.labels("prompt_injection").inc()
         labels.append("prompt_injection")
         if reject_injection:
             raise GuardrailViolation("The request contains instruction-manipulation patterns")

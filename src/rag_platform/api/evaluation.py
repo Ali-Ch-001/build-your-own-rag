@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_platform.api.dependencies import (
     get_evaluation_service,
 )
-from rag_platform.config import get_settings
 from rag_platform.db.session import get_session
 from rag_platform.evaluation.service import EvaluationService, RunSummary
 from rag_platform.security.auth import AuthContext, require_permission
@@ -34,14 +35,13 @@ async def run_evaluation(
     auth: AuthContext = Depends(require_permission("documents:write")),
     session: AsyncSession = Depends(get_session),
     service: EvaluationService = Depends(get_evaluation_service),
-    corpus_id: str | None = None,
+    corpus_id: Annotated[str, Query(min_length=1)] = "",
     dataset_name: str = "sample-golden",
 ) -> RunSummary:
     from uuid import UUID
 
-    if corpus_id is None:
-        settings = get_settings()
-        corpus_id = str(settings.dev_tenant_id)
+    if not corpus_id:
+        raise HTTPException(status_code=400, detail="corpus_id is required")
 
     return await service.run_evaluation(
         session,

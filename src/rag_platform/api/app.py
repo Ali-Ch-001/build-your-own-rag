@@ -66,6 +66,9 @@ app = FastAPI(
     version="0.1.0",
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
+    docs_url=None if settings.environment in {"stage", "prod"} else "/docs",
+    redoc_url=None,
+    openapi_url=None if settings.environment in {"stage", "prod"} else "/openapi.json",
 )
 app.add_middleware(
     CORSMiddleware,

@@ -22,6 +22,7 @@ from rag_platform.domain.models import Citation, SearchRequest, SearchResponse, 
 from rag_platform.retrieval.context import extractive_compress, select_mmr
 from rag_platform.retrieval.reranker import RerankCandidate, Reranker
 from rag_platform.security.auth import AuthContext
+from rag_platform.telemetry import CACHE_HITS, RETRIEVAL_DURATION, RETRIEVAL_REQUESTS
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +72,7 @@ class RetrievalService:
             ).encode()
         ).hexdigest()
         if cached := await self.cache.get_exact(exact_key):
+            CACHE_HITS.labels("exact").inc()
             response = SearchResponse.model_validate_json(cached)
             return await self._record_cache_hit(
                 session, auth, response, query_hash, started, "exact"
@@ -88,6 +90,7 @@ class RetrievalService:
             query_vector=query_vector,
         )
         if semantic:
+            CACHE_HITS.labels("semantic").inc()
             response = SearchResponse.model_validate_json(semantic.payload)
             response.timings_ms["semantic_cache_similarity"] = semantic.similarity
             return await self._record_cache_hit(
@@ -186,6 +189,9 @@ class RetrievalService:
             ]
         )
         await session.commit()
+        outcome = "partial" if partial else "success"
+        RETRIEVAL_REQUESTS.labels(outcome).inc()
+        RETRIEVAL_DURATION.observe(total_latency_ms / 1000.0)
         response = SearchResponse(
             request_id=request_id,
             results=response_results,

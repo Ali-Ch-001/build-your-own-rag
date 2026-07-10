@@ -31,6 +31,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy src
       - run: uv run pytest --cov=rag_platform --cov-report=term-missing
+      - run: uvx pip-audit
 
   frontend:
     name: Frontend quality
