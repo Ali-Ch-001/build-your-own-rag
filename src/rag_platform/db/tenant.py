@@ -5,14 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def set_tenant_context(session: AsyncSession, tenant_id: UUID) -> None:
-    """Scope RLS policies to one tenant for the duration of the database session.
+    """Scope RLS policies to one tenant for the current transaction.
 
-    Uses session-scoped (not transaction-scoped) set_config so the tenant
-    context survives commits and applies to subsequent queries within the
-    same session. Each request handler creates a fresh session via get_session,
-    so there is no cross-request tenant leakage.
+    Uses transaction-scoped set_config because each request handler operates
+    within a single transaction. The tenant context is re-applied after any
+    explicit commit within a request.
     """
     await session.execute(
-        text("SELECT set_config('app.tenant_id', :tenant_id, false)"),
+        text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
         {"tenant_id": str(tenant_id)},
     )

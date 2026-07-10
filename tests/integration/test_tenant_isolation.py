@@ -24,7 +24,7 @@ def testcontainers_postgres():
     container = PostgresContainer(
         "postgres:16.9-alpine",
         username="rag",
-        password="rag-test-password",
+        password="rag-test-password",  # noqa: S106
         dbname="rag_test",
     )
     container.start()
@@ -120,6 +120,7 @@ async def test_rls_allows_own_tenant_read(testcontainers_session: AsyncSession):
         )
     )
     await testcontainers_session.commit()
+    await set_tenant_context(testcontainers_session, tenant)
 
     from sqlalchemy import select
 
@@ -165,6 +166,7 @@ async def test_sha256_storage_and_retrieval(testcontainers_session: AsyncSession
         )
     )
     await testcontainers_session.commit()
+    await set_tenant_context(testcontainers_session, tenant)
 
     from sqlalchemy import select
 
@@ -197,6 +199,7 @@ async def test_stage_state_machine(testcontainers_session: AsyncSession):
     )
     testcontainers_session.add(stage)
     await testcontainers_session.commit()
+    await set_tenant_context(testcontainers_session, tenant)
 
     from sqlalchemy import select
 
