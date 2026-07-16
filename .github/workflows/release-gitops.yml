@@ -39,7 +39,7 @@ jobs:
       release_sha: ${{ steps.release.outputs.sha }}
       release_tag: ${{ steps.release.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - id: release
@@ -117,7 +117,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Update release contract
         uses: mikefarah/yq@v4.47.2
         with:
