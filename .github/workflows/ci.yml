@@ -22,7 +22,7 @@ jobs:
         with:
           version: "0.9.8"
           enable-cache: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: uv lock --check
@@ -58,7 +58,7 @@ jobs:
         with:
           version: "0.9.8"
           enable-cache: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: uv sync --frozen
